@@ -311,14 +311,25 @@ if mensaje_final:
     st.session_state.sugerencias_actuales = sugerencias_extraidas if sugerencias_extraidas else []
     texto_clara = re.sub(r'\[SUGERENCIA:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
 
+    # --- Generación Visual (A prueba de balas) ---
     ruta_foto = None
-    if "[ENVIAR FOTO]" in texto_clara:
-        texto_clara_limpio = texto_clara.replace("[ENVIAR FOTO]", "").strip()
-        m_accion = re.search(r'\((.*?)\)|\*(.*?)\*', texto_clara_limpio, flags=re.DOTALL)
-        accion_actual = m_accion.group(1) or m_accion.group(2) if m_accion else "tomándose una selfie arrogante"
+    # Buscamos variaciones como [ENVIAR FOTO] o [ENVIAR FOTO: descripción]
+    match_foto = re.search(r'\[ENVIAR FOTO:?\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
+    
+    if match_foto:
+        descripcion_interna = match_foto.group(1).strip()
+        # Borramos la etiqueta limpia del texto para que no se vea en el chat
+        texto_clara_limpio = re.sub(r'\[ENVIAR FOTO:?\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
+        
+        # Si ella puso la acción dentro de los corchetes, la usamos. Si no, buscamos en los asteriscos.
+        if descripcion_interna:
+            accion_actual = descripcion_interna
+        else:
+            m_accion = re.search(r'\((.*?)\)|\*(.*?)\*', texto_clara_limpio, flags=re.DOTALL)
+            accion_actual = m_accion.group(1) or m_accion.group(2) if m_accion else "tomándose una selfie arrogante"
+            
         with st.spinner('📸 Clara está generando una foto real...'):
             try:
-                # Modificamos el generador de imágenes para que respete si está en su casa o en el gym
                 contexto_imagen = f"at {lugar_actual}" if "Gimnasio" not in lugar_actual else "at the gym"
                 resp_img = requests.post(
                     "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0", 
@@ -332,6 +343,7 @@ if mensaje_final:
             except: pass
     else:
         texto_clara_limpio = texto_clara
+    # ---------------------------------------------
 
     cursor.execute("INSERT INTO mensajes (rol, contenido, ruta_imagen) VALUES (?, ?, ?)", ("model", texto_clara_limpio, ruta_foto))
 
