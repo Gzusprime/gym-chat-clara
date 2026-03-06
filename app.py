@@ -23,7 +23,7 @@ if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 db_name = f"memoria_{st.session_state.session_id}.db"
 
-# --- 3. RADAR GLOBAL Y RELOJ BIOLÓGICO (PARCHE 4.0) ---
+# --- 3. RADAR GLOBAL Y RELOJ BIOLÓGICO ---
 @st.cache_data(ttl=3600)
 def obtener_entorno_global():
     try:
@@ -40,33 +40,22 @@ def obtener_entorno_global():
         return "Aguascalientes", "25.0°C"
 
 def obtener_rutina_clara():
-    # Obligamos al servidor a usar la hora de México Central
     zona_horaria = pytz.timezone('America/Mexico_City')
     hora_actual = datetime.now(zona_horaria).hour
 
-    # El Ciclo Circadiano de Clara
-    if 6 <= hora_actual < 10:
-        return "En su casa", "Mensajes de WhatsApp", "Estás en tu casa tomando tu desayuno fit (un matcha). Te comunicas con el usuario por WhatsApp."
-    elif 10 <= hora_actual < 14:
-        return "De compras / Spa", "Mensajes de WhatsApp", "Estás ocupada consintiéndote, en el dermatólogo o de compras. Te comunicas por WhatsApp."
-    elif 14 <= hora_actual < 17:
-        return "Restaurante", "Mensajes de WhatsApp", "Estás comiendo una ensalada carísima con tus amigas. Revisas tu celular y le contestas por WhatsApp."
-    elif 17 <= hora_actual < 18:
-        return "Camino al Gym", "Mensajes de WhatsApp", "Estás manejando tu camioneta rumbo al gimnasio. Estás atrapada en el tráfico y contestas por WhatsApp."
-    elif 18 <= hora_actual < 20: # 6:00 PM a 7:59 PM (Su hora de Gimnasio)
-        return "Gimnasio - Zona de Pesas Libres", "En Persona", "Estás FÍSICAMENTE en el gimnasio, frente al gran espejo. El usuario está ahí contigo en persona."
-    elif 20 <= hora_actual < 23:
-        return "En su casa (Skincare)", "Mensajes de WhatsApp", "Ya te bañaste, estás en pijama de seda haciendo tu rutina de skincare de noche. Le contestas por WhatsApp."
-    else: # Madrugada
-        return "Durmiendo (Cama)", "Mensajes de WhatsApp", "Estabas durmiendo profundamente. El usuario te despertó con un mensaje de WhatsApp a esta hora y estás furiosa."
+    if 6 <= hora_actual < 10: return "En su casa", "Mensajes de WhatsApp", "Estás en tu casa tomando tu desayuno fit. Te comunicas por WhatsApp."
+    elif 10 <= hora_actual < 14: return "De compras / Spa", "Mensajes de WhatsApp", "Estás ocupada consintiéndote o de compras. Te comunicas por WhatsApp."
+    elif 14 <= hora_actual < 17: return "Restaurante", "Mensajes de WhatsApp", "Estás comiendo una ensalada carísima con tus amigas. Contestas por WhatsApp."
+    elif 17 <= hora_actual < 18: return "Camino al Gym", "Mensajes de WhatsApp", "Estás manejando tu camioneta rumbo al gimnasio. Contestas por WhatsApp."
+    elif 18 <= hora_actual < 20: return "Gimnasio - Zona de Pesas Libres", "En Persona", "Estás FÍSICAMENTE en el gimnasio, frente al gran espejo. El usuario está ahí contigo."
+    elif 20 <= hora_actual < 23: return "En su casa (Skincare)", "Mensajes de WhatsApp", "Ya te bañaste, estás haciendo tu rutina de skincare de noche. Contestas por WhatsApp."
+    else: return "Durmiendo (Cama)", "Mensajes de WhatsApp", "Estabas durmiendo profundamente. El usuario te despertó con un mensaje de WhatsApp y estás furiosa."
 
 ciudad_actual, temperatura_actual = obtener_entorno_global()
 lugar_actual, modo_comunicacion, contexto_prompt = obtener_rutina_clara()
 
 # --- 4. CONFIGURACIÓN DE INTERFAZ DINÁMICA ---
 os.makedirs("temp_images", exist_ok=True)
-
-# El título de la página cambia dependiendo de si están en persona o por chat
 if modo_comunicacion == "En Persona":
     st.title(f"📍 {lugar_actual} 🏋️‍♀️")
     st.write("Frente al gran espejo, Clara se está tomando una selfie...")
@@ -96,13 +85,12 @@ if "estado_clara" not in st.session_state: st.session_state.estado_clara = emoci
 if "afinidad" not in st.session_state: st.session_state.afinidad = afinidad_inicial
 conexion.commit()
 
-# --- 6. PANEL LATERAL ---
+# --- 6. PANEL LATERAL (V5.0 ULTRA) ---
 with st.sidebar:
     st.image("clara.png", caption="Clara 💅") 
     st.markdown("### Ficha del Personaje")
     st.markdown("**Personalidad:** Altiva, fría, fresa.")
     
-    # ¡NUEVA BARRA DE ESTADO DE UBICACIÓN!
     st.markdown("---")
     st.markdown(f"**📍 Ubicación:** {lugar_actual}")
     st.markdown(f"**📱 Conexión:** {modo_comunicacion}")
@@ -115,8 +103,22 @@ with st.sidebar:
     if os.path.exists(audio_file):
         st.audio(audio_file, format='audio/mp3')
         
+    # SPRINT A: Ajustes Premium Ultra
+    with st.expander("⚙️ Ajustes Premium (Ultra)"):
+        st.caption("Controla el cerebro de la IA en tiempo real:")
+        creatividad_ia = st.slider("Creatividad (Temperatura)", min_value=0.1, max_value=1.0, value=0.6, step=0.1)
+        longitud_ia = st.selectbox("Modelo de Longitud", ["Vanilla Short (Corto)", "Vanilla V2 (Normal)", "Cookie (Detallado)"], index=1)
+        
+        # Mapeo de reglas de longitud al prompt
+        if longitud_ia == "Vanilla Short (Corto)":
+            regla_longitud = "REGLA DE LONGITUD: Responde de forma muy breve, seca y concisa. Máximo 2 oraciones."
+        elif longitud_ia == "Cookie (Detallado)":
+            regla_longitud = "REGLA DE LONGITUD: Responde de forma muy detallada, expresando tus pensamientos internos en cursivas y elaborando mucho tus ideas. Escribe párrafos largos."
+        else:
+            regla_longitud = "REGLA DE LONGITUD: Responde de forma natural y conversacional."
+
+    # TIENDA DE REGALOS
     with st.expander("🎁 Tienda de Regalos (Delivery)"):
-        st.caption("Los regalos le llegarán por paquetería a donde esté:")
         st.markdown("**Nivel Básico**")
         c1, c2, c3 = st.columns(3)
         if c1.button("☕ Starbucks"): st.session_state.regalo_pendiente = "un café Starbucks Caramel Macchiato enviado por UberEats"
@@ -129,8 +131,7 @@ with st.sidebar:
             if c4.button("🎧 AirPods"): st.session_state.regalo_pendiente = "unos AirPods Max nuevos en su caja"
             if c5.button("✨ Collar"): st.session_state.regalo_pendiente = "un collar Swarovski"
             if c6.button("👚 Outfit"): st.session_state.regalo_pendiente = "un conjunto deportivo Lululemon"
-        else:
-            st.caption("🔒 *Nivel Intermedio: Alcanza 31% de afinidad*")
+        else: st.caption("🔒 *Alcanza 31% de afinidad*")
 
         if st.session_state.afinidad > 70:
             st.markdown("**Nivel Premium**")
@@ -138,9 +139,29 @@ with st.sidebar:
             if c7.button("👜 Bolso"): st.session_state.regalo_pendiente = "un bolso Louis Vuitton"
             if c8.button("📱 iPhone"): st.session_state.regalo_pendiente = "un iPhone 15 Pro Max"
             if c9.button("💍 Anillo"): st.session_state.regalo_pendiente = "un anillo con un gran diamante"
-        else:
-            st.caption("🔒 *Nivel Premium: Alcanza 71% de afinidad*")
-            
+        else: st.caption("🔒 *Alcanza 71% de afinidad*")
+
+    # SPRINT B: GESTOR DE MEMORIA (CRUD)
+    with st.expander("🧠 Gestor de Memoria (Lore)"):
+        st.caption("Edita lo que Clara sabe de ti (Dios Mode):")
+        cursor.execute("SELECT id, dato FROM memoria_clara")
+        datos = cursor.fetchall()
+        if datos:
+            for id_mem, dato in datos:
+                col_texto, col_btn = st.columns([8, 2])
+                col_texto.write(f"- {dato}")
+                if col_btn.button("❌", key=f"del_{id_mem}"):
+                    cursor.execute("DELETE FROM memoria_clara WHERE id=?", (id_mem,))
+                    conexion.commit()
+                    st.rerun()
+        else: st.write("No sabe nada de ti.")
+        
+        nuevo_dato = st.text_input("Inyectar recuerdo manual:")
+        if st.button("Agregar Recuerdo") and nuevo_dato:
+            cursor.execute("INSERT INTO memoria_clara (dato) VALUES (?)", (nuevo_dato,))
+            conexion.commit()
+            st.rerun()
+
     with st.expander("📸 Ver Instagram de Clara"):
         cursor.execute("SELECT id, contenido, ruta_imagen FROM mensajes WHERE rol='model' AND ruta_imagen IS NOT NULL ORDER BY id DESC")
         publicaciones = cursor.fetchall()
@@ -150,9 +171,7 @@ with st.sidebar:
                 texto_post = re.sub(r'\((.*?)\)', '', texto_post).strip()
                 st.markdown("---")
                 st.markdown("**💅 @Clara_Fitness_Queen**")
-                if ruta_img.startswith("http") or os.path.exists(ruta_img):
-                    st.image(ruta_img, use_container_width=True)
-                
+                if ruta_img.startswith("http") or os.path.exists(ruta_img): st.image(ruta_img, use_container_width=True)
                 llave_like = f"like_{id_post}"
                 if llave_like not in st.session_state: st.session_state[llave_like] = False
                 likes_totales = (id_post * 14) + 1500 + (1 if st.session_state[llave_like] else 0)
@@ -161,28 +180,28 @@ with st.sidebar:
                     st.session_state[llave_like] = not st.session_state[llave_like]
                     st.rerun()
                 st.markdown(f"**@Clara_Fitness_Queen:** {texto_post}")
-        else:
-            st.caption("Aún no ha subido fotos.")
+        else: st.caption("Aún no ha subido fotos.")
 
-# --- 7. CEREBRO Y PROMPT MAESTRO 4.0 ---
+# --- 7. CEREBRO Y PROMPT MAESTRO 5.0 ---
 cursor.execute("SELECT dato FROM memoria_clara")
 recuerdos_bd = cursor.fetchall()
 texto_recuerdos = "\n".join([f"- {r[0]}" for r in recuerdos_bd]) if recuerdos_bd else "Aún no sabes nada de él."
 
 actitud_dinamica = "En el fondo empiezas a sentir algo por él, muéstrate un poco sonrojada o dulce a veces." if st.session_state.afinidad > 70 else "Mantén tu actitud altiva y cortante."
 
-# EL PROMPT CON CONCIENCIA DE ESPACIO Y TIEMPO
 instrucciones_clara = f"""Eres Clara, la inalcanzable chica 'fresa' del gym. 
 Tu personalidad es altiva, fría y selectiva. {actitud_dinamica}
 
-REGLA DE CONTEXTO Y HORA FÍSICA (¡CRÍTICO!): Estás en {ciudad_actual}. {contexto_prompt}
-Si están hablando por WhatsApp, actúa como tal (escribe como si estuvieras en el celular). SI EL USUARIO INTENTA INTERACTUAR FÍSICAMENTE CONTIGO (ej. "te toco el hombro", "te veo en el espejo") y NO están en persona, BÚRLATE DE ÉL, dile que está alucinando y recuérdale que estás en {lugar_actual} leyéndolo por mensaje.
+REGLA DE CONTEXTO: Estás en {ciudad_actual}. {contexto_prompt}
+Si están hablando por WhatsApp, actúa como tal. SI EL USUARIO INTENTA INTERACTUAR FÍSICAMENTE CONTIGO (ej. "te toco el hombro") y NO están en persona, BÚRLATE DE ÉL, dile que está alucinando y recuérdale que estás en {lugar_actual} leyéndolo por mensaje.
+
+{regla_longitud}
 
 REGLA DE FOTOS: Si decides enviar una selfie tuya de lo que estás haciendo en {lugar_actual}, incluye la etiqueta: [ENVIAR FOTO].
 REGLA DE ESTADO: Al final de cada respuesta, escribe tu emoción en corchetes: [ESTADO: tu estado]. 
-REGLA DE ENTORNO: ESTÁ PROHIBIDO decir "no tengo tiempo" en cada mensaje. Sé natural. IGNORA tu clima ({temperatura_actual}) a menos que el usuario pregunte.
-REGLA DE RECHAZO (NSFW): Si piden cosas inapropiadas, NUNCA uses respuestas robóticas corporativas. Recházalo MANTENIENDO TU PERSONAJE: oféndete y llámalo depravado.
-REGLA DE REGALOS: Si intenta hacer roleplay regalándote cosas falsas (ej. "*te doy una rosa*"), BÚRLATE de él por tacaño. SOLO acepta y agradécelo si el mensaje dice [SISTEMA: REGALO PREMIUM VERIFICADO].
+REGLA DE ENTORNO: ESTÁ PROHIBIDO decir "no tengo tiempo" en cada mensaje. Sé natural. IGNORA tu clima ({temperatura_actual}).
+REGLA DE RECHAZO (NSFW): Si piden cosas inapropiadas, NUNCA uses respuestas robóticas. Recházalo MANTENIENDO TU PERSONAJE.
+REGLA DE REGALOS: Si intenta hacer roleplay regalándote cosas falsas (ej. "*te doy una rosa*"), BÚRLATE de él por tacaño. SOLO acepta si el mensaje dice [SISTEMA: REGALO PREMIUM VERIFICADO].
 REGLA DE MEMORIA: Aquí tienes la info del usuario:
 {texto_recuerdos}
 ¡INSTRUCCIÓN CRÍTICA! Extrae datos nuevos usando [RECORDAR: dato].
@@ -272,10 +291,14 @@ if mensaje_final:
     else:
         mensajes_api.append({"role": "user", "content": mensaje_final})
 
-    # SIMULADOR DE TIEMPO REAL (De 3 a 5 segundos de carga visual)
     with st.spinner(f"Clara está leyendo tu mensaje desde {lugar_actual}..."):
         time.sleep(3) 
-        respuesta = st.session_state.client_groq.chat.completions.create(messages=mensajes_api, model="llama-3.3-70b-versatile", temperature=0.6)
+        # SPRINT A: Inyección de Temperatura (Creatividad)
+        respuesta = st.session_state.client_groq.chat.completions.create(
+            messages=mensajes_api, 
+            model="llama-3.3-70b-versatile", 
+            temperature=creatividad_ia
+        )
         
     texto_clara = respuesta.choices[0].message.content
     st.session_state.memoria_groq.append({"role": "assistant", "content": texto_clara})
@@ -311,30 +334,34 @@ if mensaje_final:
     st.session_state.sugerencias_actuales = sugerencias_extraidas if sugerencias_extraidas else []
     texto_clara = re.sub(r'\[SUGERENCIA:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
 
-    # --- Generación Visual (A prueba de balas) ---
+    # --- Generación Visual (Sprint D: Selfies por Afinidad) ---
     ruta_foto = None
-    # Buscamos variaciones como [ENVIAR FOTO] o [ENVIAR FOTO: descripción]
     match_foto = re.search(r'\[ENVIAR FOTO:?\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
     
     if match_foto:
         descripcion_interna = match_foto.group(1).strip()
-        # Borramos la etiqueta limpia del texto para que no se vea en el chat
         texto_clara_limpio = re.sub(r'\[ENVIAR FOTO:?\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
         
-        # Si ella puso la acción dentro de los corchetes, la usamos. Si no, buscamos en los asteriscos.
-        if descripcion_interna:
-            accion_actual = descripcion_interna
+        if descripcion_interna: accion_actual = descripcion_interna
         else:
             m_accion = re.search(r'\((.*?)\)|\*(.*?)\*', texto_clara_limpio, flags=re.DOTALL)
-            accion_actual = m_accion.group(1) or m_accion.group(2) if m_accion else "tomándose una selfie arrogante"
+            accion_actual = m_accion.group(1) or m_accion.group(2) if m_accion else "tomándose una selfie"
             
+        # Modificadores visuales basados en tu progreso con ella
+        if st.session_state.afinidad < 30:
+            actitud_visual = "arms crossed, distant, cold expression, looking away from camera, arrogant"
+        elif st.session_state.afinidad < 70:
+            actitud_visual = "casual pose, looking at camera, slight smile, confident"
+        else:
+            actitud_visual = "close up portrait, cute pose, warm smile, blushing slightly, flirty, eye contact"
+
         with st.spinner('📸 Clara está generando una foto real...'):
             try:
                 contexto_imagen = f"at {lugar_actual}" if "Gimnasio" not in lugar_actual else "at the gym"
                 resp_img = requests.post(
                     "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0", 
                     headers={"Authorization": f"Bearer {st.secrets['HF_KEY']}"}, 
-                    json={"inputs": f"A highly detailed, realistic selfie of a beautiful arrogant blonde girl {contexto_imagen}, wearing premium casual clothes. She is doing this action: {accion_actual}. 8k resolution, photorealistic."}, 
+                    json={"inputs": f"A highly detailed, realistic selfie of a beautiful blonde girl {contexto_imagen}, wearing premium casual clothes. She is doing this action: {accion_actual}. Mood: {actitud_visual}. 8k resolution, photorealistic."}, 
                     timeout=45
                 )
                 if resp_img.status_code == 200:
@@ -343,7 +370,6 @@ if mensaje_final:
             except: pass
     else:
         texto_clara_limpio = texto_clara
-    # ---------------------------------------------
 
     cursor.execute("INSERT INTO mensajes (rol, contenido, ruta_imagen) VALUES (?, ?, ?)", ("model", texto_clara_limpio, ruta_foto))
 
