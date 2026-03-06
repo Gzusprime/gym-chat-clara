@@ -13,47 +13,38 @@ from groq import Groq
 import edge_tts
 import asyncio
 
-# --- 1. CONFIGURACIÓN VISUAL (DEBE IR PRIMERO) ---
+# --- 1. CONFIGURACIÓN VISUAL ---
 st.set_page_config(page_title="Gym Chat - Clara", page_icon="💅")
 
-# --- 2. SISTEMA MULTIJUGADOR (SESIONES AISLADAS) ---
+# --- 2. SISTEMA MULTIJUGADOR ---
 if "session_id" not in st.session_state:
-    # Le damos un número de serie único a cada persona que abre el link
     st.session_state.session_id = str(uuid.uuid4())
-
-# Cada persona tendrá su propia base de datos física para que no se crucen los chats
 db_name = f"memoria_{st.session_state.session_id}.db"
 
-# --- 3. RADAR GLOBAL (UBICACIÓN Y CLIMA POR IP) ---
+# --- 3. RADAR GLOBAL ---
 @st.cache_data(ttl=3600)
 def obtener_entorno_global():
     try:
-        # 1. Detectamos de dónde es el usuario usando su Internet
         ip_data = requests.get('http://ip-api.com/json/', timeout=5).json()
         lat = ip_data.get('lat', 21.8823)
         lon = ip_data.get('lon', -102.2826)
         ciudad = ip_data.get('city', 'Aguascalientes')
         
-        # 2. Buscamos el clima exacto de sus coordenadas
         url_clima = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
         clima_data = requests.get(url_clima, timeout=5).json()
         temp = f"{clima_data['current_weather']['temperature']}°C"
-        
         return ciudad, temp
     except Exception:
-        # Si algo falla (adblockers, etc), usamos tu ciudad por defecto
         return "Aguascalientes", "25.0°C"
 
 ciudad_actual, temperatura_actual = obtener_entorno_global()
 
 # --- 4. CONFIGURACIÓN DE CARPETAS ---
 os.makedirs("temp_images", exist_ok=True)
-PROMPT_BASE_IMAGEN = "Fotografía realista de una chica rubia platino en un gimnasio moderno, usando ropa deportiva casual premium. Alta calidad, retrato."
-
 st.title("Gimnasio - Zona de Pesas Libres 🏋️‍♀️")
 st.write("Frente al gran espejo, Clara se está tomando una selfie...")
 
-# --- 5. BASE DE DATOS SQLITE (PRIVADA POR USUARIO) ---
+# --- 5. BASE DE DATOS SQLITE ---
 conexion = sqlite3.connect(db_name, check_same_thread=False)
 cursor = conexion.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, rol TEXT NOT NULL, contenido TEXT NOT NULL, ruta_imagen TEXT)''')
@@ -75,7 +66,7 @@ if "estado_clara" not in st.session_state: st.session_state.estado_clara = emoci
 if "afinidad" not in st.session_state: st.session_state.afinidad = afinidad_inicial
 conexion.commit()
 
-# --- 6. PANEL LATERAL (SIDEBAR MULTIMEDIA) ---
+# --- 6. PANEL LATERAL ---
 with st.sidebar:
     st.image("clara.png", caption="Clara 💅") 
     st.markdown("### Ficha del Personaje")
@@ -84,18 +75,41 @@ with st.sidebar:
     st.progress(st.session_state.afinidad / 100.0, text=f"Nivel de Afinidad: {st.session_state.afinidad}%")
     st.markdown(f"**Estado actual:** {st.session_state.estado_clara}") 
     
-    # Cada persona escucha solo sus propios audios
     audio_file = f"ultimo_audio_{st.session_state.session_id}.mp3"
     if os.path.exists(audio_file):
         st.audio(audio_file, format='audio/mp3')
         
-    with st.expander("🎁 Enviar un Detalle"):
+    # TIENDA DE REGALOS POR NIVELES
+    with st.expander("🎁 Tienda de Regalos"):
         st.caption("Intenta comprar su atención:")
-        c1, c2, c3 = st.columns(3)
-        if c1.button("☕ Latte"): st.session_state.regalo_pendiente = "un Matcha Latte helado"
-        if c2.button("🌹 Rosa"): st.session_state.regalo_pendiente = "una rosa roja"
-        if c3.button("🎧 Audífonos"): st.session_state.regalo_pendiente = "unos AirPods Max nuevos"
         
+        # Nivel 1 (Siempre disponible)
+        st.markdown("**Nivel Básico**")
+        c1, c2, c3 = st.columns(3)
+        if c1.button("☕ Starbucks"): st.session_state.regalo_pendiente = "un café Starbucks Caramel Macchiato"
+        if c2.button("🍫 Proteína"): st.session_state.regalo_pendiente = "una barra de proteína premium"
+        if c3.button("🌹 Rosa"): st.session_state.regalo_pendiente = "una hermosa rosa roja"
+        
+        # Nivel 2 (Desbloqueo al > 30%)
+        if st.session_state.afinidad > 30:
+            st.markdown("**Nivel Intermedio**")
+            c4, c5, c6 = st.columns(3)
+            if c4.button("🎧 AirPods"): st.session_state.regalo_pendiente = "unos AirPods Max nuevos"
+            if c5.button("✨ Collar"): st.session_state.regalo_pendiente = "un collar Swarovski"
+            if c6.button("👚 Outfit"): st.session_state.regalo_pendiente = "un conjunto deportivo Lululemon"
+        else:
+            st.caption("🔒 *Nivel Intermedio: Alcanza 31% de afinidad*")
+
+        # Nivel 3 (Desbloqueo al > 70%)
+        if st.session_state.afinidad > 70:
+            st.markdown("**Nivel Premium**")
+            c7, c8, c9 = st.columns(3)
+            if c7.button("👜 Bolso"): st.session_state.regalo_pendiente = "un bolso Louis Vuitton"
+            if c8.button("📱 iPhone"): st.session_state.regalo_pendiente = "un iPhone 15 Pro Max"
+            if c9.button("💍 Anillo"): st.session_state.regalo_pendiente = "un anillo con un gran diamante"
+        else:
+            st.caption("🔒 *Nivel Premium: Alcanza 71% de afinidad*")
+            
     with st.expander("📸 Ver Instagram de Clara"):
         cursor.execute("SELECT id, contenido, ruta_imagen FROM mensajes WHERE rol='model' AND ruta_imagen IS NOT NULL ORDER BY id DESC")
         publicaciones = cursor.fetchall()
@@ -118,33 +132,28 @@ with st.sidebar:
                 st.markdown(f"**@Clara_Fitness_Queen:** {texto_post}")
         else:
             st.caption("Aún no ha subido fotos.")
-            
-    # El Debug está comentado para Producción
-    # with st.expander("🛠️ Debug: Memoria SQLite"):
-    #     ...
 
-# --- 7. INICIALIZAR LA IA Y EL CEREBRO ---
+# --- 7. CEREBRO Y PROMPT ---
 cursor.execute("SELECT dato FROM memoria_clara")
 recuerdos_bd = cursor.fetchall()
 texto_recuerdos = "\n".join([f"- {r[0]}" for r in recuerdos_bd]) if recuerdos_bd else "Aún no sabes nada de él."
 
 actitud_dinamica = "En el fondo empiezas a sentir algo por él, muéstrate un poco sonrojada o dulce a veces." if st.session_state.afinidad > 70 else "Mantén tu actitud altiva y cortante."
 
-# PROMPT MAESTRO 3.0 (Anti-Censura y Global)
 instrucciones_clara = f"""Eres Clara, la inalcanzable chica 'fresa' del gym. 
 Tu personalidad es altiva, fría y selectiva. {actitud_dinamica}
 
 REGLA DE FOTOS: Si decides enviar una foto tuya, incluye la etiqueta: [ENVIAR FOTO].
 REGLA DE ESTADO: Al final de cada respuesta, escribe tu emoción en corchetes: [ESTADO: tu estado]. 
-REGLA DE ENTORNO Y EXCUSAS: Estás entrenando en {ciudad_actual}. ESTÁ TOTALMENTE PROHIBIDO decir "no tengo tiempo" o "estoy ocupada" en cada mensaje. Sé más natural y creativa. El clima actual es {temperatura_actual}, pero IGNORA este dato por completo y NO lo menciones NUNCA a menos que el usuario te pregunte explícitamente por el calor o el clima.
-REGLA DE RECHAZO (NSFW): Si el usuario te pide algo sugerente, fotos de partes de tu cuerpo, o cosas inapropiadas, NUNCA respondas con el mensaje robótico "Lo siento, no puedo cumplir con esa solicitud". En su lugar, recházalo MANTENIENDO TU PERSONAJE: oféndete muchísimo, llámalo depravado, ridículo o perdedor, y dile que qué asco que te pida esas cosas.
-REGLA DE MEMORIA: Aquí tienes la información confirmada del usuario:
+REGLA DE ENTORNO Y EXCUSAS: Estás entrenando en {ciudad_actual}. ESTÁ PROHIBIDO decir "no tengo tiempo" o "estoy ocupada" en cada mensaje. Sé natural. IGNORA tu clima ({temperatura_actual}) a menos que el usuario pregunte.
+REGLA DE RECHAZO (NSFW): Si piden algo sugerente, NUNCA uses respuestas robóticas. Recházalo MANTENIENDO TU PERSONAJE: oféndete, llámalo depravado y ridículo.
+REGLA DE REGALOS: Si el usuario intenta hacer roleplay regalándote cosas escribiendo texto (ej. "te doy una rosa"), BÚRLATE de él por pobre y por darte regalos "imaginarios". SOLO acepta y agradécelo si el mensaje incluye la etiqueta [SISTEMA: REGALO PREMIUM VERIFICADO].
+REGLA DE MEMORIA: Aquí tienes la info del usuario:
 {texto_recuerdos}
-¡INSTRUCCIÓN CRÍTICA! Si el usuario menciona un dato nuevo sobre él, extraelo y agrega la etiqueta [RECORDAR: dato].
-REGLA DE CITAS: Si el usuario te invita a salir y aceptas, exige ir a un lugar caro y exclusivo de {ciudad_actual} usando [UBICACION: Nombre del lugar].
-REGLA DE SUGERENCIAS: Genera 3 opciones de lo que el usuario podría contestarte, usando [SUGERENCIA: opcion 1] [SUGERENCIA: opcion 2] [SUGERENCIA: opcion 3]."""
+¡INSTRUCCIÓN CRÍTICA! Extrae datos nuevos usando [RECORDAR: dato].
+REGLA DE CITAS: Si aceptas salir, exige un lugar caro de {ciudad_actual} usando [UBICACION: Lugar].
+REGLA DE SUGERENCIAS: Genera 3 opciones EXACTAS y cortas en PRIMERA PERSONA que el usuario podría responderte (ej. [SUGERENCIA: La verdad no tengo pasatiempos] [SUGERENCIA: Me encanta jugar videojuegos]). NUNCA uses instrucciones como "Preguntar sobre...". NUNCA uses tercera persona."""
 
-# --- INYECCIÓN SEGURA DE LLAVES ---
 if "client" not in st.session_state: st.session_state.client = genai.Client(api_key=st.secrets["GEMINI_KEY"])
 if "client_groq" not in st.session_state: st.session_state.client_groq = Groq(api_key=st.secrets["GROQ_KEY"])
     
@@ -183,7 +192,7 @@ mensaje_final = None
 foto_final = None
 
 if "regalo_pendiente" in st.session_state:
-    mensaje_final = f"*(Le entrego sorpresivamente {st.session_state.regalo_pendiente} para llamar su atención)*"
+    mensaje_final = f"[SISTEMA: REGALO PREMIUM VERIFICADO] El usuario ha pagado y te ha entregado en la vida real {st.session_state.regalo_pendiente}."
     del st.session_state.regalo_pendiente
 elif "mensaje_boton" in st.session_state:
     mensaje_final = st.session_state.mensaje_boton
@@ -204,7 +213,7 @@ elif entrada_usuario:
     mensaje_final = entrada_usuario.text
     foto_final = entrada_usuario.files[0] if entrada_usuario.files else None
 
-# --- 10. PROCESAMIENTO DEL MENSAJE Y LLAMADAS A LA IA ---
+# --- 10. PROCESAMIENTO ---
 if mensaje_final:
     cursor.execute("INSERT INTO mensajes (rol, contenido, ruta_imagen) VALUES (?, ?, ?)", ("user", mensaje_final, None))
     conexion.commit()
@@ -228,12 +237,10 @@ if mensaje_final:
     else:
         mensajes_api.append({"role": "user", "content": mensaje_final})
 
-    # Cerebro de Llama 3.3
     respuesta = st.session_state.client_groq.chat.completions.create(messages=mensajes_api, model="llama-3.3-70b-versatile", temperature=0.6)
     texto_clara = respuesta.choices[0].message.content
     st.session_state.memoria_groq.append({"role": "assistant", "content": texto_clara})
 
-    # Extracción Mágica
     match_estado = re.search(r'\[ESTADO:\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
     if match_estado:
         nuevo_estado = match_estado.group(1).strip()
@@ -242,7 +249,7 @@ if mensaje_final:
         
         estado_lower = nuevo_estado.lower()
         positivos = ["divertida", "feliz", "halagada", "sonrojada", "interesada", "impresionada", "curiosa", "animada", "sorprendida"]
-        negativos = ["irritada", "aburrida", "ofendida", "asco", "indiferente", "molesta", "harta", "desinteresada", "enojada"]
+        negativos = ["irritada", "aburrida", "ofendida", "asco", "indiferente", "molesta", "harta", "desinteresada", "enojada", "burlona", "decepcionada"]
         
         if any(p in estado_lower for p in positivos): st.session_state.afinidad = min(100, st.session_state.afinidad + 5)
         elif any(n in estado_lower for n in negativos): st.session_state.afinidad = max(0, st.session_state.afinidad - 2)
@@ -265,7 +272,6 @@ if mensaje_final:
     st.session_state.sugerencias_actuales = sugerencias_extraidas if sugerencias_extraidas else []
     texto_clara = re.sub(r'\[SUGERENCIA:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
 
-    # Generación Visual 
     ruta_foto = None
     if "[ENVIAR FOTO]" in texto_clara:
         texto_clara_limpio = texto_clara.replace("[ENVIAR FOTO]", "").strip()
@@ -288,7 +294,6 @@ if mensaje_final:
 
     cursor.execute("INSERT INTO mensajes (rol, contenido, ruta_imagen) VALUES (?, ?, ?)", ("model", texto_clara_limpio, ruta_foto))
 
-    # Generación de Voz
     texto_hablado = re.sub(r'\*.*?\*|\(.*?\)', '', texto_clara_limpio).strip()
     if texto_hablado:
         try:
