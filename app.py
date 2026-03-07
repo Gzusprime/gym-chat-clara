@@ -120,7 +120,7 @@ if st.session_state.personaje_seleccionado is None:
         with st.container():
             c_img, c_info = st.columns([1, 4])
             with c_img:
-                if os.path.exists(datos["icono"]): st.image(datos["icono"], use_container_width=True)
+                if os.path.exists(datos["icono"]): st.image(datos["icono"], width=80)
                 else: st.markdown(f"<h2 style='text-align:center;'>{datos['emoji']}</h2>", unsafe_allow_html=True)
             with c_info:
                 st.markdown(f"**{nombre}** {datos['emoji']}")
