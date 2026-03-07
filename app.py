@@ -9,6 +9,8 @@ from groq import Groq
 import edge_tts
 import asyncio
 import requests
+from datetime import datetime
+import pytz
 
 # 🚀 IMPORTAMOS NUESTRO MÓDULO ESTÁTICO
 from lore import PERSONAJES, obtener_entorno_global, obtener_rutina
@@ -74,8 +76,15 @@ def actualizar_monedas(cantidad):
     con_b.commit()
     con_b.close()
 
-# --- 3. MOTOR DE PERSONAJES PERSONALIZADOS (V9.0) ---
-todos_los_personajes = dict(PERSONAJES) # Clonamos a las chicas oficiales
+# --- 3. MOTOR DE PERSONAJES PERSONALIZADOS (V9.1: ESTANDARIZACIÓN) ---
+todos_los_personajes = dict(PERSONAJES) 
+
+# Tienda genérica que tiene sentido para cualquier personaje (hasta para Goku)
+TIENDA_UNIVERSAL = {
+    "basico": [("☕ Bebida", "una bebida refrescante", 50), ("🍱 Comida", "un enorme banquete de comida deliciosa", 50), ("🎁 Detalle", "un pequeño regalo", 50)],
+    "intermedio": [("🎧 Entretenimiento", "algo genial para pasar el rato", 300), ("👕 Atuendo", "ropa nueva", 300), ("🎟️ Pase", "un pase para un evento especial", 300)],
+    "premium": [("📱 Tecnología", "un dispositivo de alta tecnología", 1000), ("✈️ Viaje", "un viaje épico a un lugar lejano", 1000), ("💎 Reliquia", "un objeto de valor incalculable", 1000)]
+}
 
 db_bots = f"bots_custom_{st.session_state.usuario_id}.db"
 con_bots = sqlite3.connect(db_bots, check_same_thread=False)
@@ -87,7 +96,7 @@ cur_bots.execute("SELECT * FROM mis_bots")
 for row in cur_bots.fetchall():
     nom, emo, desc, p_base, p_img, voz = row
     todos_los_personajes[nom] = {
-        "icono": "sin_foto.png", # Al no existir, el sistema usará el Emoji
+        "icono": "sin_foto.png", 
         "emoji": emo,
         "dificultad": "Personalizado 🧠",
         "voz": voz,
@@ -96,7 +105,7 @@ for row in cur_bots.fetchall():
         "img_prompt": p_img,
         "multiplicador_ganancia": 1.0, 
         "multiplicador_perdida": 0.1,
-        "tienda": PERSONAJES["Valeria"]["tienda"] # Le damos la tienda de Valeria por defecto
+        "tienda": TIENDA_UNIVERSAL # Aplicamos la nueva tienda estandarizada
     }
 con_bots.close()
 
@@ -198,11 +207,19 @@ db_name = f"memoria_{st.session_state.usuario_id}_{p_actual.lower()}.db"
 
 ciudad_actual, temperatura_actual = obtener_entorno_global()
 
-# Adaptar el entorno si es un bot personalizado (reutilizan la rutina de Valeria por defecto)
+# Adaptar el entorno si es un bot personalizado o uno de la historia base
 if p_actual in PERSONAJES:
     lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = obtener_rutina(p_actual)
 else:
-    lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = obtener_rutina("Valeria")
+    # Rutina Genérica para Bots Personalizados
+    zona_horaria = pytz.timezone('America/Mexico_City')
+    hora = datetime.now(zona_horaria).hour
+    if 6 <= hora < 18:
+        lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = "Explorando", "En Persona", "Estás realizando tus actividades del día a día.", "https://images.unsplash.com/photo-1506744626753-eda818c24f55?q=80&w=1470"
+    elif 18 <= hora < 22:
+        lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = "Descansando", "WhatsApp", "Estás descansando después de un día activo.", "https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1469"
+    else:
+        lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = "Base de Operaciones", "WhatsApp", "Es de madrugada, te encuentras en tu zona de descanso.", "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1494"
 
 inyectar_fondo(url_fondo_dinamico)
 
@@ -310,7 +327,7 @@ cursor.execute("SELECT dato FROM memoria_clara")
 recuerdos_bd = cursor.fetchall()
 texto_recuerdos = "\n".join([f"- {r[0]}" for r in recuerdos_bd]) if recuerdos_bd else "Aún no sabe nada de ti."
 
-if st.session_state.afinidad > 70.0: actitud_dinamica = "En el fondo ya sientes mucho cariño por él, muéstrate coqueta o muy dulce."
+if st.session_state.afinidad > 70.0: actitud_dinamica = "En el fondo ya sientes mucho cariño por él, muéstrate amigable."
 elif st.session_state.afinidad < 20.0: actitud_dinamica = "Apenas lo conoces, mantén tu distancia y tu personalidad base fuerte."
 else: actitud_dinamica = "Empiezas a agarrarle confianza, trátalo con amabilidad pero sin exagerar."
 
