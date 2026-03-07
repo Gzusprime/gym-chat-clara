@@ -261,7 +261,7 @@ REGLA DE REGALOS: Si intenta hacer roleplay regalándote cosas falsas de texto, 
 REGLA DE MEMORIA: El usuario se llama {st.session_state.nombre_real}. Info sobre él:
 {texto_recuerdos}
 ¡CRÍTICO! Extrae datos nuevos de su vida usando [RECORDAR: dato].
-REGLA DE SUGERENCIAS: Genera 3 opciones EXACTAS en PRIMERA PERSONA para que el usuario responda. EJEMPLO: [SUGERENCIA: Yo prefiero el rock] [SUGERENCIA: ¿A dónde vas?]."""
+REGLA DE SUGERENCIAS (OBLIGATORIA): Escribe 3 posibles respuestas cortas que EL USUARIO te podría contestar. Usa EXACTAMENTE este formato: [SUGERENCIA: Lo que diría el usuario]. NUNCA agregues explicaciones ni instrucciones."""
 
 if "client" not in st.session_state: st.session_state.client = genai.Client(api_key=st.secrets["GEMINI_KEY"])
 if "client_groq" not in st.session_state: st.session_state.client_groq = Groq(api_key=st.secrets["GROQ_KEY"])
@@ -373,11 +373,11 @@ if mensaje_final:
         cursor.execute("INSERT INTO memoria_clara (dato) VALUES (?)", (match_recuerdo.group(1).strip(),))
         texto_clara = re.sub(r'\[RECORDAR:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
 
-    sugerencias_extraidas = re.findall(r'\[SUGERENCIA:\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
+    # SPRINT 7.1: Extracción flexible (Atrapa errores como SUGERRECIA o SUGERENCIAS)
+    sugerencias_extraidas = re.findall(r'\[SUGE.*?:\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
     st.session_state.sugerencias_actuales = sugerencias_extraidas if sugerencias_extraidas else []
-    texto_clara = re.sub(r'\[SUGERENCIA:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
-
-    ruta_foto = None
+    texto_clara = re.sub(r'\[SUGE.*?:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
+    
     match_foto = re.search(r'\[ENVIAR FOTO:?\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
     if match_foto:
         descripcion_interna = match_foto.group(1).strip()
