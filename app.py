@@ -14,8 +14,17 @@ from groq import Groq
 import edge_tts
 import asyncio
 
-# --- 1. CONFIGURACIÓN VISUAL ---
-st.set_page_config(page_title="Multiverso IA - Chat", page_icon="📱")
+# --- 1. CONFIGURACIÓN VISUAL Y CSS MÓVIL (V8.0) ---
+st.set_page_config(page_title="Chats", page_icon="💬", layout="centered")
+
+# Inyección de CSS para simular App Nativa (Márgenes reducidos, botones redondeados)
+st.markdown("""
+    <style>
+    .block-container { padding-top: 2rem; padding-bottom: 2rem; max-width: 700px; }
+    .stButton>button { border-radius: 20px; font-weight: bold; }
+    hr { margin-top: 0.5em; margin-bottom: 0.5em; }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- 2. DICCIONARIO DEL MULTIVERSO (LORE Y CONFIGURACIÓN) ---
 PERSONAJES = {
@@ -60,15 +69,15 @@ PERSONAJES = {
     }
 }
 
-# --- 3. SISTEMA DE LOGIN Y NAVEGACIÓN ---
+# --- 3. SISTEMA DE LOGIN Y NAVEGACIÓN (BANDEJA DE ENTRADA V8.0) ---
 if "usuario_valido" not in st.session_state: st.session_state.usuario_valido = False
 if "personaje_seleccionado" not in st.session_state: st.session_state.personaje_seleccionado = None
 
 if not st.session_state.usuario_valido:
     st.title("Hub Principal 🌐")
-    st.write("Por favor, inicia sesión con tu nombre para acceder a tus chats.")
+    st.write("Inicia sesión para acceder a tus chats.")
     nombre_usuario = st.text_input("¿Cuál es tu nombre?")
-    if st.button("Iniciar Sesión"):
+    if st.button("Iniciar Sesión", use_container_width=True):
         if nombre_usuario.strip():
             st.session_state.usuario_id = re.sub(r'\W+', '', nombre_usuario.lower())
             st.session_state.nombre_real = nombre_usuario.strip()
@@ -76,29 +85,53 @@ if not st.session_state.usuario_valido:
             st.rerun()
     st.stop()
 
+# PANTALLA DE BANDEJA DE ENTRADA (WHATSAPP UI)
 if st.session_state.personaje_seleccionado is None:
-    st.title(f"Bienvenido, {st.session_state.nombre_real} 👋")
-    st.write("¿Con quién te gustaría platicar hoy?")
-    
-    col1, col2, col3 = st.columns(3)
-    cols = [col1, col2, col3]
-    
-    for idx, (nombre, datos) in enumerate(PERSONAJES.items()):
-        with cols[idx]:
-            if os.path.exists(datos["icono"]): st.image(datos["icono"])
-            else: st.markdown(f"<h1 style='text-align: center;'>{datos['emoji']}</h1>", unsafe_allow_html=True)
-            st.subheader(f"{nombre} {datos['emoji']}")
-            st.caption(f"**Dificultad:** {datos['dificultad']}")
-            st.write(datos["descripcion"])
-            if st.button(f"Chatear con {nombre}", key=f"btn_{nombre}", use_container_width=True):
-                st.session_state.personaje_seleccionado = nombre
-                if "memoria_groq" in st.session_state: del st.session_state.memoria_groq
-                if "sugerencias_actuales" in st.session_state: del st.session_state.sugerencias_actuales
-                st.rerun()
-    
-    if st.button("🚪 Cerrar Sesión"):
+    col_t, col_btn = st.columns([7, 3])
+    col_t.title("💬 Chats")
+    if col_btn.button("🚪 Salir"):
         for key in list(st.session_state.keys()): del st.session_state[key]
         st.rerun()
+        
+    st.write(f"Conectado como: **{st.session_state.nombre_real}**")
+    st.markdown("---")
+    
+    for nombre, datos in PERSONAJES.items():
+        db_char = f"memoria_{st.session_state.usuario_id}_{nombre.lower()}.db"
+        ultimo_msj = "Toca para iniciar el chat..."
+        
+        # Extraer el último mensaje de la base de datos para la vista previa
+        if os.path.exists(db_char):
+            try:
+                con_temp = sqlite3.connect(db_char)
+                cur_temp = con_temp.cursor()
+                cur_temp.execute("SELECT contenido FROM mensajes WHERE rol='model' ORDER BY id DESC LIMIT 1")
+                row = cur_temp.fetchone()
+                if row:
+                    texto_crudo = row[0]
+                    # Limpiamos asteriscos y corchetes para que la vista previa se lea natural
+                    texto_limpio = re.sub(r'\[.*?\]|\*.*?\*', '', texto_crudo).strip()
+                    ultimo_msj = texto_limpio[:50] + "..." if len(texto_limpio) > 50 else texto_limpio
+                    if not ultimo_msj: ultimo_msj = "📷 Foto enviada"
+                con_temp.close()
+            except: pass
+
+        # Dibujar la fila del chat
+        with st.container():
+            c_img, c_info = st.columns([1, 4])
+            with c_img:
+                if os.path.exists(datos["icono"]): st.image(datos["icono"], use_container_width=True)
+                else: st.markdown(f"<h2 style='text-align:center;'>{datos['emoji']}</h2>", unsafe_allow_html=True)
+            with c_info:
+                st.markdown(f"**{nombre}** {datos['emoji']}")
+                st.caption(f"_{ultimo_msj}_")
+                if st.button(f"Abrir chat", key=f"btn_{nombre}", use_container_width=True):
+                    st.session_state.personaje_seleccionado = nombre
+                    if "memoria_groq" in st.session_state: del st.session_state.memoria_groq
+                    if "sugerencias_actuales" in st.session_state: del st.session_state.sugerencias_actuales
+                    st.rerun()
+            st.markdown("---")
+            
     st.stop()
 
 # --- SI LLEGAMOS AQUÍ, YA HAY UN PERSONAJE SELECCIONADO ---
@@ -145,11 +178,11 @@ lugar_actual, modo_comunicacion, contexto_prompt = obtener_rutina(p_actual)
 # --- 5. MENÚ SUPERIOR DE NAVEGACIÓN ---
 col_titulo, col_menu = st.columns([8, 2])
 with col_menu:
-    with st.popover("⚙️ Sistema"):
-        if st.button("⬅️ Cambiar Chica", use_container_width=True):
+    with st.popover("⚙️"):
+        if st.button("⬅️ Volver a Chats", use_container_width=True):
             st.session_state.personaje_seleccionado = None
             st.rerun()
-        if st.button("🚨 Reiniciar Historia", use_container_width=True):
+        if st.button("🚨 Reiniciar Chat", use_container_width=True):
             con = sqlite3.connect(db_name, check_same_thread=False)
             con.execute("DELETE FROM mensajes")
             con.execute("DELETE FROM memoria_clara")
@@ -163,19 +196,17 @@ with col_menu:
 
 with col_titulo:
     if modo_comunicacion == "En Persona":
-        st.title(f"📍 {lugar_actual} con {p_actual} {info_p['emoji']}")
-        st.write(f"Estás físicamente con {p_actual}...")
+        st.subheader(f"📍 {lugar_actual}")
     else:
-        st.title(f"💬 WhatsApp con {p_actual} {info_p['emoji']}")
-        st.write("Escribiendo...")
+        st.subheader(f"{info_p['emoji']} {p_actual}")
 
-# --- 6. BASE DE DATOS SQLITE (Actualizada con Reloj Interno) ---
+# --- 6. BASE DE DATOS SQLITE ---
 conexion = sqlite3.connect(db_name, check_same_thread=False)
 cursor = conexion.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, rol TEXT NOT NULL, contenido TEXT NOT NULL, ruta_imagen TEXT)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS memoria_clara (id INTEGER PRIMARY KEY AUTOINCREMENT, dato TEXT NOT NULL)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS estado_personaje (id INTEGER PRIMARY KEY, afinidad REAL, emocion TEXT)''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS meta_datos (clave TEXT PRIMARY KEY, valor TEXT)''') # Tabla para el reloj
+cursor.execute('''CREATE TABLE IF NOT EXISTS meta_datos (clave TEXT PRIMARY KEY, valor TEXT)''')
 
 cursor.execute("SELECT afinidad, emocion FROM estado_personaje WHERE id=1")
 estado_bd = cursor.fetchone()
@@ -191,10 +222,10 @@ if "afinidad" not in st.session_state: st.session_state.afinidad = afinidad_inic
 
 # --- 7. PANEL LATERAL DINÁMICO ---
 with st.sidebar:
-    if os.path.exists(info_p["icono"]): st.image(info_p["icono"], caption=f"{p_actual} {info_p['emoji']}")
+    if os.path.exists(info_p["icono"]): st.image(info_p["icono"])
     st.markdown("---")
-    st.markdown(f"**📍 Ubicación:** {lugar_actual}")
-    st.markdown(f"**📱 Conexión:** {modo_comunicacion}")
+    st.markdown(f"**📍:** {lugar_actual}")
+    st.markdown(f"**📱:** {modo_comunicacion}")
     st.markdown("---")
     
     st.progress(min(st.session_state.afinidad / 100.0, 1.0), text=f"Afinidad: {st.session_state.afinidad:.1f}%")
@@ -202,14 +233,14 @@ with st.sidebar:
     
     audio_file = f"ultimo_audio_{st.session_state.usuario_id}_{p_actual}.mp3"
     
-    with st.expander("⚙️ Ajustes Premium"):
+    with st.expander("⚙️ Ajustes IA"):
         creatividad_ia = st.slider("Creatividad", 0.1, 1.0, 0.6, 0.1)
         longitud_ia = st.selectbox("Longitud", ["Corta", "Normal", "Detallada"], index=1)
         if longitud_ia == "Corta": regla_longitud = "Responde breve, máximo 2 oraciones."
         elif longitud_ia == "Detallada": regla_longitud = "Responde detallado, con pensamientos en cursiva."
         else: regla_longitud = "Responde natural."
 
-    with st.expander(f"🎁 Tienda de Regalos ({p_actual})"):
+    with st.expander(f"🎁 Tienda ({p_actual})"):
         st.markdown("**Básico**")
         c1, c2, c3 = st.columns(3)
         b = info_p["tienda"]["basico"]
@@ -224,7 +255,6 @@ with st.sidebar:
             if c4.button(i[0][0]): st.session_state.regalo_pendiente = i[0][1]
             if c5.button(i[1][0]): st.session_state.regalo_pendiente = i[1][1]
             if c6.button(i[2][0]): st.session_state.regalo_pendiente = i[2][1]
-        else: st.caption("🔒 *Alcanza 30%*")
 
         if st.session_state.afinidad >= 70.0:
             st.markdown("**Premium**")
@@ -233,7 +263,6 @@ with st.sidebar:
             if c7.button(p[0][0]): st.session_state.regalo_pendiente = p[0][1]
             if c8.button(p[1][0]): st.session_state.regalo_pendiente = p[1][1]
             if c9.button(p[2][0]): st.session_state.regalo_pendiente = p[2][1]
-        else: st.caption("🔒 *Alcanza 70%*")
 
 # --- 8. CEREBRO Y PROMPT MAESTRO ---
 cursor.execute("SELECT dato FROM memoria_clara")
@@ -272,13 +301,13 @@ for rol, contenido, ruta_imagen_db in cursor.fetchall():
             imagen_html = f'<img src="data:image/png;base64,{base64.b64encode(img_file.read()).decode()}" style="max-width: 100%; border-radius: 8px; margin-bottom: 8px;"><br>'
     
     if rol == "user":
-        st.markdown(f"""<div style="display: flex; justify-content: flex-end; margin-bottom: 10px;"><div style="background-color: #005c4b; color: white; padding: 10px 15px; border-radius: 15px 15px 0px 15px; max-width: 75%;">{contenido_visual}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div style="display: flex; justify-content: flex-end; margin-bottom: 10px;"><div style="background-color: #005c4b; color: white; padding: 10px 15px; border-radius: 15px 15px 0px 15px; max-width: 85%;">{contenido_visual}</div></div>""", unsafe_allow_html=True)
     else:
-        st.markdown(f"""<div style="display: flex; justify-content: flex-start; margin-bottom: 10px;"><div style="background-color: #202c33; color: white; padding: 10px 15px; border-radius: 15px 15px 15px 0px; max-width: 75%;"><span style="font-size: 0.8em; color: #aaa;">{info_p['emoji']} {p_actual}</span><br>{imagen_html}{contenido_visual}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div style="display: flex; justify-content: flex-start; margin-bottom: 10px;"><div style="background-color: #202c33; color: white; padding: 10px 15px; border-radius: 15px 15px 15px 0px; max-width: 85%;"><span style="font-size: 0.8em; color: #aaa;">{info_p['emoji']} {p_actual}</span><br>{imagen_html}{contenido_visual}</div></div>""", unsafe_allow_html=True)
 
 if os.path.exists(audio_file): st.audio(audio_file, format='audio/mp3')
 
-col_mic, col_sug, col_act = st.columns([2, 3, 5])
+col_mic, col_sug, col_act = st.columns([2, 3, 4])
 audio_usuario = None
 with col_mic:
     with st.popover("🎙️ Voz"):
@@ -287,15 +316,15 @@ with col_mic:
 
 with col_sug:
     if "sugerencias_actuales" in st.session_state and st.session_state.sugerencias_actuales:
-        with st.popover("✨ Sugerencias"):
+        with st.popover("✨ Sug"):
             for i, opcion in enumerate(st.session_state.sugerencias_actuales):
                 if st.button(opcion, use_container_width=True, key=f"sug_{i}"):
                     st.session_state.mensaje_boton = opcion
                     st.rerun()
 
-with col_act: modo_accion = st.toggle("🎬 Modo Acción (*texto*)")
+with col_act: modo_accion = st.toggle("🎬 Acción")
 
-entrada_usuario = st.chat_input(f"Escríbele a {p_actual}...", accept_file=True, file_type=["png", "jpg", "jpeg"])
+entrada_usuario = st.chat_input(f"Mensaje para {p_actual}...", accept_file=True, file_type=["png", "jpg", "jpeg"])
 
 mensaje_final, foto_final = None, None
 
@@ -321,7 +350,6 @@ elif entrada_usuario:
 
 # --- 10. PROCESAMIENTO AI Y HUMO Y ESPEJOS ---
 if mensaje_final:
-    # 1. Chequeo de Ausencia (Humo y Espejos)
     hora_actual = time.time()
     horas_ausente = 0.0
     cursor.execute("SELECT valor FROM meta_datos WHERE clave='ultima_conexion'")
@@ -333,23 +361,18 @@ if mensaje_final:
     cursor.execute("INSERT OR REPLACE INTO meta_datos (clave, valor) VALUES (?, ?)", ("ultima_conexion", str(hora_actual)))
     conexion.commit()
 
-    # Inyección de reclamo si desapareciste más de 2 horas (y si no es el primer mensaje)
     mensaje_para_api = mensaje_final
     if horas_ausente >= 2.0 and row is not None:
-        reclamo = f"[SISTEMA: El usuario te dejó en 'visto' y desapareció por {int(horas_ausente)} horas. Muestra tu molestia o reclámale sutilmente por dejarte esperando antes de contestar a su mensaje.]\n\n"
+        reclamo = f"[SISTEMA: El usuario te dejó en 'visto' y desapareció por {int(horas_ausente)} horas. Reclámale sutilmente por dejarte esperando antes de contestar.]\n\n"
         mensaje_para_api = reclamo + mensaje_final
 
-    # 2. Guardado en Memoria
     cursor.execute("INSERT INTO mensajes (rol, contenido, ruta_imagen) VALUES (?, ?, ?)", ("user", mensaje_final, None))
     conexion.commit()
     
     if "memoria_groq" not in st.session_state: st.session_state.memoria_groq = []
-    # Guardamos el mensaje limpio en el UI, pero a la API le mandamos el que tiene la queja (si aplica)
     st.session_state.memoria_groq.append({"role": "user", "content": mensaje_para_api})
     
-    # 3. Optimización de Tokens (Ventana Deslizante)
     mensajes_api = [{"role": "system", "content": instrucciones_clara}]
-    # Solo tomamos los últimos 10 mensajes (5 idas y vueltas) para no saturar la API gratuita de Groq
     historial_reciente = st.session_state.memoria_groq[-11:-1] if len(st.session_state.memoria_groq) > 10 else st.session_state.memoria_groq[:-1]
     mensajes_api.extend(historial_reciente)
 
@@ -361,8 +384,8 @@ if mensaje_final:
         except: mensajes_api.append({"role": "user", "content": mensaje_para_api})
     else: mensajes_api.append({"role": "user", "content": mensaje_para_api})
 
-    with st.spinner(f"{p_actual} está respondiendo..."):
-        time.sleep(2) 
+    with st.spinner("Escribiendo..."):
+        time.sleep(1.5) 
         respuesta = st.session_state.client_groq.chat.completions.create(messages=mensajes_api, model="llama-3.3-70b-versatile", temperature=creatividad_ia)
         
     texto_clara = respuesta.choices[0].message.content
