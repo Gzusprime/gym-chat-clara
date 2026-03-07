@@ -9,10 +9,12 @@ from groq import Groq
 import edge_tts
 import asyncio
 import requests
+from PIL import Image
+from io import BytesIO
 from datetime import datetime
 import pytz
 
-# 🚀 IMPORTAMOS NUESTRO MÓDULO ESTÁTICO
+# 🚀 IMPORTAMOS NUESTRO MÓDULO ESTÁTICO (No se toca)
 from lore import PERSONAJES, obtener_entorno_global, obtener_rutina
 
 # --- 1. CONFIGURACIÓN VISUAL Y CSS MÓVIL ---
@@ -27,6 +29,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Motor de Fondos Dinámicos
 def inyectar_fondo(url_imagen):
     st.markdown(f"""
         <style>
@@ -36,6 +39,11 @@ def inyectar_fondo(url_imagen):
         }}
         </style>
     """, unsafe_allow_html=True)
+
+# --- CONFIGURACIÓN DE RUTAS ---
+DIRECTORIO_AVATARS_PERSISTENTES = "avatars_personalizados"
+os.makedirs(DIRECTORIO_AVATARS_PERSISTENTES, exist_ok=True)
+os.makedirs("temp_images", exist_ok=True)
 
 # --- 2. SISTEMA DE LOGIN Y BILLETERA ---
 if "usuario_valido" not in st.session_state: st.session_state.usuario_valido = False
@@ -76,27 +84,37 @@ def actualizar_monedas(cantidad):
     con_b.commit()
     con_b.close()
 
-# --- 3. MOTOR DE PERSONAJES PERSONALIZADOS (V9.1: ESTANDARIZACIÓN) ---
-todos_los_personajes = dict(PERSONAJES) 
-
-# Tienda genérica que tiene sentido para cualquier personaje (hasta para Goku)
+# --- TIENDA GENÉRICA ESTANDARIZADA (V9.1) ---
 TIENDA_UNIVERSAL = {
     "basico": [("☕ Bebida", "una bebida refrescante", 50), ("🍱 Comida", "un enorme banquete de comida deliciosa", 50), ("🎁 Detalle", "un pequeño regalo", 50)],
     "intermedio": [("🎧 Entretenimiento", "algo genial para pasar el rato", 300), ("👕 Atuendo", "ropa nueva", 300), ("🎟️ Pase", "un pase para un evento especial", 300)],
     "premium": [("📱 Tecnología", "un dispositivo de alta tecnología", 1000), ("✈️ Viaje", "un viaje épico a un lugar lejano", 1000), ("💎 Reliquia", "un objeto de valor incalculable", 1000)]
 }
 
+# --- 3. MOTOR DE PERSONAJES PERSONALIZADOS (V9.2) ---
+todos_los_personajes = dict(PERSONAJES) 
+
+# Adaptamos a Goku existente de la V9.0 a la V9.1 (para que no crashee con la tienda)
+for p_nom, p_datos in todos_los_personajes.items():
+    if p_nom not in PERSONAJES: # Es personalizado de V9.0
+        p_datos["tienda"] = TIENDA_UNIVERSAL
+
 db_bots = f"bots_custom_{st.session_state.usuario_id}.db"
 con_bots = sqlite3.connect(db_bots, check_same_thread=False)
 cur_bots = con_bots.cursor()
+
+# Actualización de esquema (Sprint 9.2: Añadir ruta_avatar para persistencia)
+try: cur_bots.execute("ALTER TABLE mis_bots ADD COLUMN ruta_avatar TEXT")
+except: pass # Si ya existe la columna, ignora el error
+
 cur_bots.execute('''CREATE TABLE IF NOT EXISTS mis_bots 
-    (nombre TEXT, emoji TEXT, descripcion TEXT, prompt TEXT, img_prompt TEXT, voz TEXT)''')
+    (nombre TEXT, emoji TEXT, descripcion TEXT, prompt TEXT, img_prompt TEXT, voz TEXT, ruta_avatar TEXT)''')
 cur_bots.execute("SELECT * FROM mis_bots")
 
 for row in cur_bots.fetchall():
-    nom, emo, desc, p_base, p_img, voz = row
+    nom, emo, desc, p_base, p_img, voz, ruta_av = row
     todos_los_personajes[nom] = {
-        "icono": "sin_foto.png", 
+        "icono": ruta_av if ruta_av and os.path.exists(ruta_av) else "sin_foto.png", 
         "emoji": emo,
         "dificultad": "Personalizado 🧠",
         "voz": voz,
@@ -105,24 +123,24 @@ for row in cur_bots.fetchall():
         "img_prompt": p_img,
         "multiplicador_ganancia": 1.0, 
         "multiplicador_perdida": 0.1,
-        "tienda": TIENDA_UNIVERSAL # Aplicamos la nueva tienda estandarizada
+        "tienda": TIENDA_UNIVERSAL 
     }
 con_bots.close()
 
-# --- 4. FORMULARIO DE CREACIÓN DE PERSONAJE ---
+# --- 4. FORMULARIO DE CREACIÓN DE PERSONAJE CON AVATAR PERSISTENTE ---
 if st.session_state.creando_personaje:
     inyectar_fondo("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1364")
     st.title("🛠️ Fábrica de Personajes")
     st.write("Diseña el cerebro y la apariencia de tu propia IA.")
     
-    with st.form("form_nuevo_bot"):
+    with st.form("form_nuevo_bot", clear_on_submit=False):
         c1, c2 = st.columns([4, 1])
-        n_nombre = c1.text_input("Nombre de la IA", placeholder="Ej. Sofía, Marcus, etc.")
+        n_nombre = c1.text_input("Nombre de la IA", placeholder="Ej. Sofía, Goku, etc.")
         n_emoji = c2.text_input("Emoji", value="🤖", max_chars=2)
         
-        n_desc = st.text_input("Descripción Corta", placeholder="Ej. Compañera de trabajo amable.")
+        n_desc = st.text_input("Descripción Corta", placeholder="Ej. Guerrero Saiyajin legendario.")
         n_prompt = st.text_area("Prompt Maestro (Su alma)", placeholder="Eres [Nombre], tienes una personalidad...", height=100)
-        n_img = st.text_area("Prompt Visual (En inglés, para sus fotos)", placeholder="photorealistic, highly detailed, beautiful girl...", height=80)
+        n_img = st.text_area("Prompt Visual (En inglés, para sus fotos y avatar)", placeholder="goku super saiyan, photorealistic, cinematic lighting, 8k...", height=80)
         n_voz = st.selectbox("Acento de Voz", [
             "es-MX-DaliaNeural", # Mexicana
             "es-ES-ElviraNeural", # Española
@@ -131,12 +149,42 @@ if st.session_state.creando_personaje:
             "es-MX-JorgeNeural"  # Mexicano (Hombre)
         ])
         
+        st.write("🔒 *Al crear el bot, se le asignará una economía universal.*")
+        
         btn_crear = st.form_submit_button("🧪 Darle Vida (Crear)")
         
         if btn_crear and n_nombre and n_prompt:
+            ruta_avatar_guardado = None
+            if n_img: # Generamos avatar persistente
+                with st.spinner(f"📸 Generando avatar permanente para {n_nombre} (esto tarda 30s)..."):
+                    try:
+                        # Usamos SDXL para la foto de perfil permanente
+                        resp_img_av = requests.post(
+                            "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0", 
+                            headers={"Authorization": f"Bearer {st.secrets['HF_KEY']}"}, 
+                            json={"inputs": f"highly detailed 1:1 square profile picture of {n_img}. 8k, photorealistic, looking at camera."}, 
+                            timeout=60
+                        )
+                        if resp_img_av.status_code == 200:
+                            # Recortar y guardar permanentemente en formato cuadrado
+                            imagen_av = Image.open(BytesIO(resp_img_av.content))
+                            # Forzar 1:1
+                            width, height = imagen_av.size
+                            min_dim = min(width, height)
+                            left = (width - min_dim)/2
+                            top = (height - min_dim)/2
+                            right = (width + min_dim)/2
+                            bottom = (height + min_dim)/2
+                            imagen_recortada = imagen_av.crop((left, top, right, bottom))
+                            
+                            nombre_archivo_av = f"{re.sub(r'\W+', '', n_nombre.lower())}_{int(time.time())}.png"
+                            ruta_avatar_guardado = os.path.join(DIRECTORIO_AVATARS_PERSISTENTES, nombre_archivo_av)
+                            imagen_recortada.save(ruta_avatar_guardado, format="PNG")
+                    except: pass
+
             con_b2 = sqlite3.connect(db_bots)
-            con_b2.execute("INSERT INTO mis_bots VALUES (?, ?, ?, ?, ?, ?)", 
-                          (n_nombre.strip(), n_emoji, n_desc, n_prompt, n_img, n_voz))
+            con_b2.execute("INSERT INTO mis_bots VALUES (?, ?, ?, ?, ?, ?, ?)", 
+                          (n_nombre.strip(), n_emoji, n_desc, n_prompt, n_img, n_voz, ruta_avatar_guardado))
             con_b2.commit()
             con_b2.close()
             st.session_state.creando_personaje = False
@@ -187,6 +235,7 @@ if st.session_state.personaje_seleccionado is None:
             c_img, c_info = st.columns([1, 4])
             with c_img:
                 if os.path.exists(datos["icono"]): st.image(datos["icono"], width=80)
+                # Si es personalizado y no tiene foto, usa un emoji gigante
                 else: st.markdown(f"<h1 style='text-align:center;'>{datos['emoji']}</h1>", unsafe_allow_html=True)
             with c_info:
                 st.markdown(f"**{nombre}** {datos['emoji']}")
@@ -205,25 +254,26 @@ p_actual = st.session_state.personaje_seleccionado
 info_p = todos_los_personajes[p_actual]
 db_name = f"memoria_{st.session_state.usuario_id}_{p_actual.lower()}.db"
 
+# --- 4. RADAR Y RELOJ BIOLÓGICO ---
 ciudad_actual, temperatura_actual = obtener_entorno_global()
 
-# Adaptar el entorno si es un bot personalizado o uno de la historia base
+# Adaptar el entorno si es bot base o personalizado
 if p_actual in PERSONAJES:
     lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = obtener_rutina(p_actual)
 else:
-    # Rutina Genérica para Bots Personalizados
+    # Rutina Genérica para Bots Personalizados (Goku)
     zona_horaria = pytz.timezone('America/Mexico_City')
     hora = datetime.now(zona_horaria).hour
     if 6 <= hora < 18:
-        lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = "Explorando", "En Persona", "Estás realizando tus actividades del día a día.", "https://images.unsplash.com/photo-1506744626753-eda818c24f55?q=80&w=1470"
+        lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = "Explorando", "En Persona", "Estás realizando tus actividades.", "https://images.unsplash.com/photo-1506744626753-eda818c24f55?q=80&w=1470"
     elif 18 <= hora < 22:
         lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = "Descansando", "WhatsApp", "Estás descansando después de un día activo.", "https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1469"
     else:
-        lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = "Base de Operaciones", "WhatsApp", "Es de madrugada, te encuentras en tu zona de descanso.", "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1494"
+        lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = "Base de Operaciones", "WhatsApp", "Es de madrugada.", "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1494"
 
 inyectar_fondo(url_fondo_dinamico)
 
-# --- 6. MENÚ SUPERIOR DE NAVEGACIÓN ---
+# --- 5. MENÚ SUPERIOR DE NAVEGACIÓN ---
 col_titulo, col_menu = st.columns([8, 2])
 with col_menu:
     with st.popover("⚙️"):
@@ -246,7 +296,7 @@ with col_titulo:
     if modo_comunicacion == "En Persona": st.subheader(f"📍 {lugar_actual}")
     else: st.subheader(f"{info_p['emoji']} {p_actual}")
 
-# --- 7. BASE DE DATOS SQLITE DE CHAT ---
+# --- 6. BASE DE DATOS SQLITE DE CHAT ---
 conexion = sqlite3.connect(db_name, check_same_thread=False)
 cursor = conexion.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, rol TEXT NOT NULL, contenido TEXT NOT NULL, ruta_imagen TEXT)''')
@@ -266,9 +316,10 @@ else:
 if "estado_clara" not in st.session_state: st.session_state.estado_clara = emocion_inicial
 if "afinidad" not in st.session_state: st.session_state.afinidad = afinidad_inicial
 
-# --- 8. PANEL LATERAL DINÁMICO ---
+# --- 7. PANEL LATERAL DINÁMICO ---
 with st.sidebar:
     if os.path.exists(info_p["icono"]): st.image(info_p["icono"])
+    # Si es personalizado y usa el emoji fallback (V9.0)
     else: st.markdown(f"<h1 style='text-align:center; font-size: 80px;'>{info_p['emoji']}</h1>", unsafe_allow_html=True)
     
     st.markdown("---")
@@ -416,9 +467,21 @@ elif entrada_usuario:
     actualizar_monedas(st.session_state.monedas + 5)
     st.toast("¡Ganaste +5 🪙 por platicar!", icon="💰")
 
-# --- 11. PROCESAMIENTO AI ---
+# --- 11. PROCESAMIENTO AI Y LIMPIEZA AUTOMÁTICA (SPRINT C) ---
 if mensaje_final:
     hora_actual = time.time()
+    
+    # --- Sprint C (Producción): Limpiador de carpeta temp_images ---
+    # Eliminar imágenes de chat antiguas (más de 1 hora) para ahorrar espacio en la nube
+    with st.spinner("🧹 Limpiando sistema..."):
+        ahora = time.time()
+        for f in os.listdir("temp_images"):
+            if f.endswith(".png"):
+                ruta_f = os.path.join("temp_images", f)
+                if os.stat(ruta_f).st_mtime < ahora - 3600: # 1 hora
+                    try: os.remove(ruta_f)
+                    except: pass
+                    
     horas_ausente = 0.0
     cursor.execute("SELECT valor FROM meta_datos WHERE clave='ultima_conexion'")
     row = cursor.fetchone()
@@ -465,7 +528,7 @@ if mensaje_final:
         texto_clara = re.sub(r'\[ESTADO:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
         
         e_low = st.session_state.estado_clara.lower()
-        positivos = ["divertida", "feliz", "halagada", "sonrojada", "interesada", "impresionada", "animada", "tierna", "enamorada"]
+        positivos = ["divertida", "feliz", "halagada", "sonrojada", "interesada", "impresionada", "animada", "tierna", "enamorada", "amigable"]
         negativos = ["irritada", "aburrida", "ofendida", "asco", "indiferente", "molesta", "harta"]
         
         ganancia = info_p["multiplicador_ganancia"]
