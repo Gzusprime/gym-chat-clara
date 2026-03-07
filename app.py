@@ -325,6 +325,11 @@ cursor.execute("SELECT rol, contenido, ruta_imagen FROM mensajes ORDER BY id ASC
 for rol, contenido, ruta_imagen_db in cursor.fetchall():
     contenido_visual = re.sub(r'\((.*?)\)', r'<i style="color: #a6b2ba;">*\1*</i>', contenido, flags=re.DOTALL)
     contenido_visual = re.sub(r'\*(.*?)\*', r'<i style="color: #a6b2ba;">*\1*</i>', contenido_visual, flags=re.DOTALL)
+    
+    # SPRINT 8.1.1: Ocultar comandos de sistema visualmente
+    if "[SISTEMA: REGALO PREMIUM VERIFICADO]" in contenido_visual:
+        contenido_visual = contenido_visual.replace("[SISTEMA: REGALO PREMIUM VERIFICADO] El usuario te ha enviado", "🎁 <b>Regalo enviado:</b>")
+
     imagen_html = ""
     if ruta_imagen_db and os.path.exists(ruta_imagen_db):
         with open(ruta_imagen_db, "rb") as img_file:
