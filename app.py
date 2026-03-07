@@ -22,10 +22,22 @@ st.markdown("""
     .block-container { padding-top: 2rem; padding-bottom: 2rem; max-width: 700px; }
     .stButton>button { border-radius: 20px; font-weight: bold; }
     hr { margin-top: 0.5em; margin-bottom: 0.5em; }
+    header { background: transparent !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DICCIONARIO DEL MULTIVERSO (ECONOMÍA AÑADIDA V8.1) ---
+# SPRINT 8.2: Motor de Fondos Dinámicos (Unsplash)
+def inyectar_fondo(url_imagen):
+    st.markdown(f"""
+        <style>
+        .stApp {{
+            background: linear-gradient(rgba(15, 18, 20, 0.88), rgba(15, 18, 20, 0.95)), url('{url_imagen}') no-repeat center center fixed !important;
+            background-size: cover !important;
+        }}
+        </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. DICCIONARIO DEL MULTIVERSO ---
 PERSONAJES = {
     "Clara": {
         "icono": "clara.png", "emoji": "💅", "dificultad": "Difícil (Fresa/Altiva)",
@@ -68,11 +80,12 @@ PERSONAJES = {
     }
 }
 
-# --- 3. SISTEMA DE LOGIN Y NAVEGACIÓN ---
+# --- 3. SISTEMA DE LOGIN Y BILLETERA ---
 if "usuario_valido" not in st.session_state: st.session_state.usuario_valido = False
 if "personaje_seleccionado" not in st.session_state: st.session_state.personaje_seleccionado = None
 
 if not st.session_state.usuario_valido:
+    inyectar_fondo("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1364") # Fondo abstracto oscuro
     st.title("Hub Principal 🌐")
     st.write("Inicia sesión para acceder a tus chats.")
     nombre_usuario = st.text_input("¿Cuál es tu nombre?")
@@ -84,7 +97,6 @@ if not st.session_state.usuario_valido:
             st.rerun()
     st.stop()
 
-# --- CARGAR BILLETERA GLOBAL (V8.1) ---
 db_billetera = f"billetera_{st.session_state.usuario_id}.db"
 con_bill = sqlite3.connect(db_billetera, check_same_thread=False)
 cur_bill = con_bill.cursor()
@@ -99,7 +111,6 @@ else:
     st.session_state.monedas = row_bill[0]
 con_bill.close()
 
-# Función auxiliar para guardar monedas
 def actualizar_monedas(cantidad):
     st.session_state.monedas = cantidad
     con_b = sqlite3.connect(db_billetera)
@@ -107,8 +118,9 @@ def actualizar_monedas(cantidad):
     con_b.commit()
     con_b.close()
 
-# PANTALLA DE BANDEJA DE ENTRADA (WHATSAPP UI)
+# PANTALLA DE BANDEJA DE ENTRADA
 if st.session_state.personaje_seleccionado is None:
+    inyectar_fondo("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1364") # Fondo menú principal
     col_t, col_btn = st.columns([7, 3])
     col_t.title("💬 Chats")
     if col_btn.button("🚪 Salir"):
@@ -172,27 +184,30 @@ def obtener_rutina(personaje):
     hora = datetime.now(zona_horaria).hour
     
     if personaje == "Clara":
-        if 6 <= hora < 10: return "En su casa", "WhatsApp", "Tomando desayuno fit."
-        elif 10 <= hora < 14: return "De compras / Spa", "WhatsApp", "Consintiéndose."
-        elif 14 <= hora < 17: return "Restaurante", "WhatsApp", "Comiendo ensalada con amigas."
-        elif 17 <= hora < 20: return "Gimnasio", "En Persona", "Entrenando frente al espejo. El usuario está FÍSICAMENTE ahí."
-        elif 20 <= hora < 23: return "En su casa", "WhatsApp", "Haciendo skincare."
-        else: return "Cama", "WhatsApp", "Durmiendo, furiosa porque la despiertas."
+        if 6 <= hora < 10: return "En su casa", "WhatsApp", "Tomando desayuno fit.", "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=1475"
+        elif 10 <= hora < 14: return "De compras / Spa", "WhatsApp", "Consintiéndose.", "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1470"
+        elif 14 <= hora < 17: return "Restaurante", "WhatsApp", "Comiendo ensalada.", "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=1470"
+        elif 17 <= hora < 20: return "Gimnasio", "En Persona", "Entrenando frente al espejo. Estás ahí.", "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470"
+        elif 20 <= hora < 23: return "En su casa", "WhatsApp", "Haciendo skincare.", "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=1475"
+        else: return "Cama", "WhatsApp", "Durmiendo furiosa.", "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=1470"
         
     elif personaje == "Raven":
-        if 6 <= hora < 14: return "Cama", "WhatsApp", "Durmiendo hasta tarde."
-        elif 14 <= hora < 21: return "Cafetería", "En Persona", "Trabajando de barista. El usuario está FÍSICAMENTE pidiendo un café."
-        elif 21 <= hora < 24: return "En un toque", "WhatsApp", "Escuchando música o en un bar."
-        else: return "Explorando internet", "WhatsApp", "Viendo cosas raras en la madrugada."
+        if 6 <= hora < 14: return "Cama", "WhatsApp", "Durmiendo hasta tarde.", "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=1470"
+        elif 14 <= hora < 21: return "Cafetería", "En Persona", "Trabajando de barista. Estás pidiendo café.", "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=1447"
+        elif 21 <= hora < 24: return "En un bar/toque", "WhatsApp", "Escuchando música.", "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1374"
+        else: return "Madrugada oscura", "WhatsApp", "Viendo cosas raras.", "https://images.unsplash.com/photo-1559588501-8b3684a1e941?q=80&w=1470"
         
     elif personaje == "Valeria":
-        if 7 <= hora < 15: return "UPA (Universidad)", "En Persona", "En clases o en el campus de la UPA. El usuario está FÍSICAMENTE ahí."
-        elif 15 <= hora < 18: return "Biblioteca", "WhatsApp", "Haciendo tareas de ingeniería."
-        elif 18 <= hora < 23: return "Casa", "WhatsApp", "Relajándose y viendo series."
-        else: return "Cama", "WhatsApp", "Durmiendo dulcemente."
+        if 7 <= hora < 15: return "UPA (Universidad)", "En Persona", "En el campus de la UPA. Estás ahí.", "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=1470"
+        elif 15 <= hora < 18: return "Biblioteca", "WhatsApp", "Haciendo tareas de ingeniería.", "https://images.unsplash.com/photo-1568667256549-094345857637?q=80&w=1415"
+        elif 18 <= hora < 23: return "Casa", "WhatsApp", "Relajándose y viendo series.", "https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1469"
+        else: return "Cama", "WhatsApp", "Durmiendo dulcemente.", "https://images.unsplash.com/photo-1505693314120-0d443867891c?q=80&w=1511"
 
 ciudad_actual, temperatura_actual = obtener_entorno_global()
-lugar_actual, modo_comunicacion, contexto_prompt = obtener_rutina(p_actual)
+lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = obtener_rutina(p_actual)
+
+# Inyectar el fondo correspondiente a la rutina de la chica actual
+inyectar_fondo(url_fondo_dinamico)
 
 # --- 5. MENÚ SUPERIOR DE NAVEGACIÓN ---
 col_titulo, col_menu = st.columns([8, 2])
@@ -243,7 +258,6 @@ if "afinidad" not in st.session_state: st.session_state.afinidad = afinidad_inic
 with st.sidebar:
     if os.path.exists(info_p["icono"]): st.image(info_p["icono"])
     st.markdown("---")
-    # Mostrar billetera en el menú
     st.markdown(f"### 💳 Billetera: {st.session_state.monedas} 🪙")
     st.markdown("---")
     
@@ -259,7 +273,6 @@ with st.sidebar:
         elif longitud_ia == "Detallada": regla_longitud = "Responde detallado, con pensamientos en cursiva."
         else: regla_longitud = "Responde natural."
 
-    # TIENDA MONETIZADA (V8.1)
     def procesar_compra(nombre, desc, precio):
         if st.session_state.monedas >= precio:
             actualizar_monedas(st.session_state.monedas - precio)
@@ -329,7 +342,7 @@ for rol, contenido, ruta_imagen_db in cursor.fetchall():
     # SPRINT 8.1.1: Ocultar comandos de sistema visualmente
     if "[SISTEMA: REGALO PREMIUM VERIFICADO]" in contenido_visual:
         contenido_visual = contenido_visual.replace("[SISTEMA: REGALO PREMIUM VERIFICADO] El usuario te ha enviado", "🎁 <b>Regalo enviado:</b>")
-
+        
     imagen_html = ""
     if ruta_imagen_db and os.path.exists(ruta_imagen_db):
         with open(ruta_imagen_db, "rb") as img_file:
