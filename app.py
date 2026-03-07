@@ -14,10 +14,9 @@ from groq import Groq
 import edge_tts
 import asyncio
 
-# --- 1. CONFIGURACIÓN VISUAL Y CSS MÓVIL (V8.0) ---
+# --- 1. CONFIGURACIÓN VISUAL Y CSS MÓVIL ---
 st.set_page_config(page_title="Chats", page_icon="💬", layout="centered")
 
-# Inyección de CSS para simular App Nativa (Márgenes reducidos, botones redondeados)
 st.markdown("""
     <style>
     .block-container { padding-top: 2rem; padding-bottom: 2rem; max-width: 700px; }
@@ -26,7 +25,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DICCIONARIO DEL MULTIVERSO (LORE Y CONFIGURACIÓN) ---
+# --- 2. DICCIONARIO DEL MULTIVERSO (ECONOMÍA AÑADIDA V8.1) ---
 PERSONAJES = {
     "Clara": {
         "icono": "clara.png", "emoji": "💅", "dificultad": "Difícil (Fresa/Altiva)",
@@ -36,9 +35,9 @@ PERSONAJES = {
         "img_prompt": "beautiful arrogant blonde girl, premium casual clothes, fitness model",
         "multiplicador_ganancia": 0.5, "multiplicador_perdida": 0.3,
         "tienda": {
-            "basico": [("☕ Starbucks", "un café Starbucks"), ("🍫 Proteína", "una barra de proteína"), ("🌹 Rosa", "una rosa roja")],
-            "intermedio": [("🎧 AirPods", "unos AirPods Max"), ("✨ Collar", "un collar Swarovski"), ("👚 Outfit", "un outfit Lululemon")],
-            "premium": [("👜 Bolso", "un bolso Louis Vuitton"), ("📱 iPhone", "un iPhone 15 Pro Max"), ("💍 Anillo", "un anillo con diamante")]
+            "basico": [("☕ Starbucks", "un café Starbucks", 50), ("🍫 Proteína", "una barra de proteína", 50), ("🌹 Rosa", "una rosa roja", 50)],
+            "intermedio": [("🎧 AirPods", "unos AirPods Max", 300), ("✨ Collar", "un collar Swarovski", 300), ("👚 Outfit", "un outfit Lululemon", 300)],
+            "premium": [("👜 Bolso", "un bolso Louis Vuitton", 1000), ("📱 iPhone", "un iPhone 15 Pro Max", 1000), ("💍 Anillo", "un anillo con diamante", 1000)]
         }
     },
     "Raven": {
@@ -49,9 +48,9 @@ PERSONAJES = {
         "img_prompt": "beautiful goth girl, dark hair, dark makeup, alternative casual black clothes, piercings, pale skin",
         "multiplicador_ganancia": 0.8, "multiplicador_perdida": 0.1,
         "tienda": {
-            "basico": [("☕ Café Negro", "un café americano sin azúcar"), ("🍪 Galleta", "una galleta de chispas"), ("📖 Libro", "un libro de poesía oscura")],
-            "intermedio": [("🎧 Audífonos", "unos audífonos vintage"), ("🦇 Gargantilla", "una gargantilla con un murciélago"), ("🎸 Vinilo", "un disco de vinilo de rock gótico")],
-            "premium": [("👢 Botas", "unas botas de plataforma Demonias"), ("🎟️ Concierto", "boletos VIP para un concierto de rock"), ("🏍️ Chamarra", "una chamarra de cuero auténtico")]
+            "basico": [("☕ Café Negro", "un café americano sin azúcar", 50), ("🍪 Galleta", "una galleta de chispas", 50), ("📖 Libro", "un libro de poesía oscura", 50)],
+            "intermedio": [("🎧 Audífonos", "unos audífonos vintage", 300), ("🦇 Gargantilla", "una gargantilla con un murciélago", 300), ("🎸 Vinilo", "un disco de vinilo de rock gótico", 300)],
+            "premium": [("👢 Botas", "unas botas de plataforma Demonias", 1000), ("🎟️ Concierto", "boletos VIP para un concierto de rock", 1000), ("🏍️ Chamarra", "una chamarra de cuero auténtico", 1000)]
         }
     },
     "Valeria": {
@@ -62,14 +61,14 @@ PERSONAJES = {
         "img_prompt": "cute university student girl, sweet warm smile, casual cute clothes, slightly messy hair, glasses, natural makeup",
         "multiplicador_ganancia": 1.5, "multiplicador_perdida": 0.0,
         "tienda": {
-            "basico": [("🧋 Boba Tea", "un té de perlas de taro"), ("🌻 Girasol", "un lindo girasol"), ("🍫 Chocolate", "un chocolate artesanal")],
-            "intermedio": [("🧸 Peluche", "un osito de peluche gigante"), ("📓 Libreta", "una libreta de apuntes bonita"), ("💐 Ramo", "un ramo de flores silvestres")],
-            "premium": [("💻 Laptop", "una laptop para sus tareas de la UPA"), ("🧥 Sudadera", "una sudadera calientita de su banda favorita"), ("💍 Promesa", "un anillo de promesa de plata")]
+            "basico": [("🧋 Boba Tea", "un té de perlas de taro", 50), ("🌻 Girasol", "un lindo girasol", 50), ("🍫 Chocolate", "un chocolate artesanal", 50)],
+            "intermedio": [("🧸 Peluche", "un osito de peluche gigante", 300), ("📓 Libreta", "una libreta de apuntes bonita", 300), ("💐 Ramo", "un ramo de flores silvestres", 300)],
+            "premium": [("💻 Laptop", "una laptop para sus tareas de la UPA", 1000), ("🧥 Sudadera", "una sudadera calientita de su banda favorita", 1000), ("💍 Promesa", "un anillo de promesa de plata", 1000)]
         }
     }
 }
 
-# --- 3. SISTEMA DE LOGIN Y NAVEGACIÓN (BANDEJA DE ENTRADA V8.0) ---
+# --- 3. SISTEMA DE LOGIN Y NAVEGACIÓN ---
 if "usuario_valido" not in st.session_state: st.session_state.usuario_valido = False
 if "personaje_seleccionado" not in st.session_state: st.session_state.personaje_seleccionado = None
 
@@ -85,6 +84,29 @@ if not st.session_state.usuario_valido:
             st.rerun()
     st.stop()
 
+# --- CARGAR BILLETERA GLOBAL (V8.1) ---
+db_billetera = f"billetera_{st.session_state.usuario_id}.db"
+con_bill = sqlite3.connect(db_billetera, check_same_thread=False)
+cur_bill = con_bill.cursor()
+cur_bill.execute('CREATE TABLE IF NOT EXISTS economia (id INTEGER PRIMARY KEY, monedas INTEGER)')
+cur_bill.execute("SELECT monedas FROM economia WHERE id=1")
+row_bill = cur_bill.fetchone()
+if not row_bill:
+    cur_bill.execute("INSERT INTO economia (id, monedas) VALUES (1, 500)")
+    con_bill.commit()
+    st.session_state.monedas = 500
+else:
+    st.session_state.monedas = row_bill[0]
+con_bill.close()
+
+# Función auxiliar para guardar monedas
+def actualizar_monedas(cantidad):
+    st.session_state.monedas = cantidad
+    con_b = sqlite3.connect(db_billetera)
+    con_b.execute("UPDATE economia SET monedas = ? WHERE id = 1", (cantidad,))
+    con_b.commit()
+    con_b.close()
+
 # PANTALLA DE BANDEJA DE ENTRADA (WHATSAPP UI)
 if st.session_state.personaje_seleccionado is None:
     col_t, col_btn = st.columns([7, 3])
@@ -93,14 +115,13 @@ if st.session_state.personaje_seleccionado is None:
         for key in list(st.session_state.keys()): del st.session_state[key]
         st.rerun()
         
-    st.write(f"Conectado como: **{st.session_state.nombre_real}**")
+    st.write(f"Conectado como: **{st.session_state.nombre_real}** | 💳 **{st.session_state.monedas} 🪙**")
     st.markdown("---")
     
     for nombre, datos in PERSONAJES.items():
         db_char = f"memoria_{st.session_state.usuario_id}_{nombre.lower()}.db"
         ultimo_msj = "Toca para iniciar el chat..."
         
-        # Extraer el último mensaje de la base de datos para la vista previa
         if os.path.exists(db_char):
             try:
                 con_temp = sqlite3.connect(db_char)
@@ -109,14 +130,12 @@ if st.session_state.personaje_seleccionado is None:
                 row = cur_temp.fetchone()
                 if row:
                     texto_crudo = row[0]
-                    # Limpiamos asteriscos y corchetes para que la vista previa se lea natural
                     texto_limpio = re.sub(r'\[.*?\]|\*.*?\*', '', texto_crudo).strip()
                     ultimo_msj = texto_limpio[:50] + "..." if len(texto_limpio) > 50 else texto_limpio
                     if not ultimo_msj: ultimo_msj = "📷 Foto enviada"
                 con_temp.close()
             except: pass
 
-        # Dibujar la fila del chat
         with st.container():
             c_img, c_info = st.columns([1, 4])
             with c_img:
@@ -179,10 +198,10 @@ lugar_actual, modo_comunicacion, contexto_prompt = obtener_rutina(p_actual)
 col_titulo, col_menu = st.columns([8, 2])
 with col_menu:
     with st.popover("⚙️"):
-        if st.button("⬅️ Volver a Chats", use_container_width=True):
+        if st.button("⬅️ Volver", use_container_width=True):
             st.session_state.personaje_seleccionado = None
             st.rerun()
-        if st.button("🚨 Reiniciar Chat", use_container_width=True):
+        if st.button("🚨 Reiniciar", use_container_width=True):
             con = sqlite3.connect(db_name, check_same_thread=False)
             con.execute("DELETE FROM mensajes")
             con.execute("DELETE FROM memoria_clara")
@@ -224,8 +243,8 @@ if "afinidad" not in st.session_state: st.session_state.afinidad = afinidad_inic
 with st.sidebar:
     if os.path.exists(info_p["icono"]): st.image(info_p["icono"])
     st.markdown("---")
-    st.markdown(f"**📍:** {lugar_actual}")
-    st.markdown(f"**📱:** {modo_comunicacion}")
+    # Mostrar billetera en el menú
+    st.markdown(f"### 💳 Billetera: {st.session_state.monedas} 🪙")
     st.markdown("---")
     
     st.progress(min(st.session_state.afinidad / 100.0, 1.0), text=f"Afinidad: {st.session_state.afinidad:.1f}%")
@@ -240,29 +259,40 @@ with st.sidebar:
         elif longitud_ia == "Detallada": regla_longitud = "Responde detallado, con pensamientos en cursiva."
         else: regla_longitud = "Responde natural."
 
+    # TIENDA MONETIZADA (V8.1)
+    def procesar_compra(nombre, desc, precio):
+        if st.session_state.monedas >= precio:
+            actualizar_monedas(st.session_state.monedas - precio)
+            st.session_state.regalo_pendiente = desc
+            st.rerun()
+        else:
+            st.toast(f"❌ Necesitas {precio}🪙 para comprar esto. ¡Sigue chateando!", icon="💸")
+
     with st.expander(f"🎁 Tienda ({p_actual})"):
         st.markdown("**Básico**")
         c1, c2, c3 = st.columns(3)
         b = info_p["tienda"]["basico"]
-        if c1.button(b[0][0]): st.session_state.regalo_pendiente = b[0][1]
-        if c2.button(b[1][0]): st.session_state.regalo_pendiente = b[1][1]
-        if c3.button(b[2][0]): st.session_state.regalo_pendiente = b[2][1]
+        if c1.button(f"{b[0][0]}\n({b[0][2]}🪙)"): procesar_compra(b[0][0], b[0][1], b[0][2])
+        if c2.button(f"{b[1][0]}\n({b[1][2]}🪙)"): procesar_compra(b[1][0], b[1][1], b[1][2])
+        if c3.button(f"{b[2][0]}\n({b[2][2]}🪙)"): procesar_compra(b[2][0], b[2][1], b[2][2])
         
         if st.session_state.afinidad >= 30.0:
             st.markdown("**Intermedio**")
             c4, c5, c6 = st.columns(3)
             i = info_p["tienda"]["intermedio"]
-            if c4.button(i[0][0]): st.session_state.regalo_pendiente = i[0][1]
-            if c5.button(i[1][0]): st.session_state.regalo_pendiente = i[1][1]
-            if c6.button(i[2][0]): st.session_state.regalo_pendiente = i[2][1]
+            if c4.button(f"{i[0][0]}\n({i[0][2]}🪙)"): procesar_compra(i[0][0], i[0][1], i[0][2])
+            if c5.button(f"{i[1][0]}\n({i[1][2]}🪙)"): procesar_compra(i[1][0], i[1][1], i[1][2])
+            if c6.button(f"{i[2][0]}\n({i[2][2]}🪙)"): procesar_compra(i[2][0], i[2][1], i[2][2])
+        else: st.caption("🔒 *Desbloquea al 30%*")
 
         if st.session_state.afinidad >= 70.0:
             st.markdown("**Premium**")
             c7, c8, c9 = st.columns(3)
             p = info_p["tienda"]["premium"]
-            if c7.button(p[0][0]): st.session_state.regalo_pendiente = p[0][1]
-            if c8.button(p[1][0]): st.session_state.regalo_pendiente = p[1][1]
-            if c9.button(p[2][0]): st.session_state.regalo_pendiente = p[2][1]
+            if c7.button(f"{p[0][0]}\n({p[0][2]}🪙)"): procesar_compra(p[0][0], p[0][1], p[0][2])
+            if c8.button(f"{p[1][0]}\n({p[1][2]}🪙)"): procesar_compra(p[1][0], p[1][1], p[1][2])
+            if c9.button(f"{p[2][0]}\n({p[2][2]}🪙)"): procesar_compra(p[2][0], p[2][1], p[2][2])
+        else: st.caption("🔒 *Desbloquea al 70%*")
 
 # --- 8. CEREBRO Y PROMPT MAESTRO ---
 cursor.execute("SELECT dato FROM memoria_clara")
@@ -334,6 +364,8 @@ if "regalo_pendiente" in st.session_state:
 elif "mensaje_boton" in st.session_state:
     mensaje_final = st.session_state.mensaje_boton
     del st.session_state.mensaje_boton
+    actualizar_monedas(st.session_state.monedas + 5)
+    st.toast("¡Ganaste +5 🪙 por platicar!", icon="💰")
 elif audio_usuario:
     datos_audio = audio_usuario.getvalue()
     if st.session_state.get("ultimo_audio_procesado") != datos_audio:
@@ -342,11 +374,15 @@ elif audio_usuario:
                 transcripcion = st.session_state.client_groq.audio.transcriptions.create(file=("audio.wav", datos_audio), model="whisper-large-v3-turbo", language="es")
                 mensaje_final = f"*(En nota de voz)*: {transcripcion.text}"
                 st.session_state["ultimo_audio_procesado"] = datos_audio
+                actualizar_monedas(st.session_state.monedas + 5)
+                st.toast("¡Ganaste +5 🪙 por tu nota de voz!", icon="💰")
             except: pass
 elif entrada_usuario:
     mensaje_final = entrada_usuario.text
     if modo_accion: mensaje_final = f"*{mensaje_final}*"
     foto_final = entrada_usuario.files[0] if entrada_usuario.files else None
+    actualizar_monedas(st.session_state.monedas + 5)
+    st.toast("¡Ganaste +5 🪙 por platicar!", icon="💰")
 
 # --- 10. PROCESAMIENTO AI Y HUMO Y ESPEJOS ---
 if mensaje_final:
