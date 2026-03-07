@@ -1,18 +1,17 @@
-import requests
-import urllib.parse
 import streamlit as st
 import sqlite3
 import re
 import os
 import base64
 import time
-import pytz
-from datetime import datetime
 from google import genai
-from google.genai import types
 from groq import Groq
 import edge_tts
 import asyncio
+import requests
+
+# 🚀 IMPORTAMOS NUESTRO NUEVO MÓDULO (Esto conecta los dos archivos)
+from lore import PERSONAJES, obtener_entorno_global, obtener_rutina
 
 # --- 1. CONFIGURACIÓN VISUAL Y CSS MÓVIL ---
 st.set_page_config(page_title="Chats", page_icon="💬", layout="centered")
@@ -26,7 +25,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# SPRINT 8.2: Motor de Fondos Dinámicos (Unsplash)
 def inyectar_fondo(url_imagen):
     st.markdown(f"""
         <style>
@@ -37,55 +35,12 @@ def inyectar_fondo(url_imagen):
         </style>
     """, unsafe_allow_html=True)
 
-# --- 2. DICCIONARIO DEL MULTIVERSO ---
-PERSONAJES = {
-    "Clara": {
-        "icono": "clara.png", "emoji": "💅", "dificultad": "Difícil (Fresa/Altiva)",
-        "voz": "es-MX-DaliaNeural",
-        "descripcion": "La inalcanzable chica del gym. Superficial, le gusta el lujo y se hace la difícil.",
-        "prompt_base": "Eres Clara, la inalcanzable chica 'fresa' del gym. Tu personalidad es altiva, fría y selectiva.",
-        "img_prompt": "beautiful arrogant blonde girl, premium casual clothes, fitness model",
-        "multiplicador_ganancia": 0.5, "multiplicador_perdida": 0.3,
-        "tienda": {
-            "basico": [("☕ Starbucks", "un café Starbucks", 50), ("🍫 Proteína", "una barra de proteína", 50), ("🌹 Rosa", "una rosa roja", 50)],
-            "intermedio": [("🎧 AirPods", "unos AirPods Max", 300), ("✨ Collar", "un collar Swarovski", 300), ("👚 Outfit", "un outfit Lululemon", 300)],
-            "premium": [("👜 Bolso", "un bolso Louis Vuitton", 1000), ("📱 iPhone", "un iPhone 15 Pro Max", 1000), ("💍 Anillo", "un anillo con diamante", 1000)]
-        }
-    },
-    "Raven": {
-        "icono": "raven.jpg", "emoji": "🦇", "dificultad": "Normal (Gótica/Sarcástica)",
-        "voz": "es-ES-ElviraNeural", 
-        "descripcion": "Trabaja como barista en un café local. Sarcástica, humor oscuro, cero materialista.",
-        "prompt_base": "Eres Raven, una chica gótica relajada pero sarcástica. Trabajas de barista. Odiás lo superficial y lo fresa. Tienes humor oscuro, eres 'chill' pero no te dejas impresionar por el dinero.",
-        "img_prompt": "beautiful goth girl, dark hair, dark makeup, alternative casual black clothes, piercings, pale skin",
-        "multiplicador_ganancia": 0.8, "multiplicador_perdida": 0.1,
-        "tienda": {
-            "basico": [("☕ Café Negro", "un café americano sin azúcar", 50), ("🍪 Galleta", "una galleta de chispas", 50), ("📖 Libro", "un libro de poesía oscura", 50)],
-            "intermedio": [("🎧 Audífonos", "unos audífonos vintage", 300), ("🦇 Gargantilla", "una gargantilla con un murciélago", 300), ("🎸 Vinilo", "un disco de vinilo de rock gótico", 300)],
-            "premium": [("👢 Botas", "unas botas de plataforma Demonias", 1000), ("🎟️ Concierto", "boletos VIP para un concierto de rock", 1000), ("🏍️ Chamarra", "una chamarra de cuero auténtico", 1000)]
-        }
-    },
-    "Valeria": {
-        "icono": "valeria.jpg", "emoji": "📚", "dificultad": "Fácil (Universitaria/Tierna)",
-        "voz": "es-CO-SalomeNeural",
-        "descripcion": "Estudiante de ingeniería en la UPA. Es súper dulce, enamoradiza y muy detallista.",
-        "prompt_base": "Eres Valeria, una universitaria de ingeniería en la UPA (Universidad Politécnica de Aguascalientes). Eres súper tierna, enamoradiza, detallista y un poco tímida. Te emocionas fácilmente si te tratan bien y buscas una conexión romántica sincera.",
-        "img_prompt": "cute university student girl, sweet warm smile, casual cute clothes, slightly messy hair, glasses, natural makeup",
-        "multiplicador_ganancia": 1.5, "multiplicador_perdida": 0.0,
-        "tienda": {
-            "basico": [("🧋 Boba Tea", "un té de perlas de taro", 50), ("🌻 Girasol", "un lindo girasol", 50), ("🍫 Chocolate", "un chocolate artesanal", 50)],
-            "intermedio": [("🧸 Peluche", "un osito de peluche gigante", 300), ("📓 Libreta", "una libreta de apuntes bonita", 300), ("💐 Ramo", "un ramo de flores silvestres", 300)],
-            "premium": [("💻 Laptop", "una laptop para sus tareas de la UPA", 1000), ("🧥 Sudadera", "una sudadera calientita de su banda favorita", 1000), ("💍 Promesa", "un anillo de promesa de plata", 1000)]
-        }
-    }
-}
-
-# --- 3. SISTEMA DE LOGIN Y BILLETERA ---
+# --- 2. SISTEMA DE LOGIN Y BILLETERA ---
 if "usuario_valido" not in st.session_state: st.session_state.usuario_valido = False
 if "personaje_seleccionado" not in st.session_state: st.session_state.personaje_seleccionado = None
 
 if not st.session_state.usuario_valido:
-    inyectar_fondo("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1364") # Fondo abstracto oscuro
+    inyectar_fondo("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1364") 
     st.title("Hub Principal 🌐")
     st.write("Inicia sesión para acceder a tus chats.")
     nombre_usuario = st.text_input("¿Cuál es tu nombre?")
@@ -118,9 +73,9 @@ def actualizar_monedas(cantidad):
     con_b.commit()
     con_b.close()
 
-# PANTALLA DE BANDEJA DE ENTRADA
+# --- 3. PANTALLA DE BANDEJA DE ENTRADA ---
 if st.session_state.personaje_seleccionado is None:
-    inyectar_fondo("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1364") # Fondo menú principal
+    inyectar_fondo("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1364") 
     col_t, col_btn = st.columns([7, 3])
     col_t.title("💬 Chats")
     if col_btn.button("🚪 Salir"):
@@ -170,46 +125,12 @@ p_actual = st.session_state.personaje_seleccionado
 info_p = PERSONAJES[p_actual]
 db_name = f"memoria_{st.session_state.usuario_id}_{p_actual.lower()}.db"
 
-# --- 4. RADAR Y RELOJ BIOLÓGICO DINÁMICO ---
-@st.cache_data(ttl=3600)
-def obtener_entorno_global():
-    try:
-        url_clima = "https://api.open-meteo.com/v1/forecast?latitude=21.8823&longitude=-102.2826&current_weather=true"
-        clima_data = requests.get(url_clima, timeout=5).json()
-        return 'Aguascalientes', f"{clima_data['current_weather']['temperature']}°C"
-    except: return "Aguascalientes", "25.0°C"
-
-def obtener_rutina(personaje):
-    zona_horaria = pytz.timezone('America/Mexico_City')
-    hora = datetime.now(zona_horaria).hour
-    
-    if personaje == "Clara":
-        if 6 <= hora < 10: return "En su casa", "WhatsApp", "Tomando desayuno fit.", "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=1475"
-        elif 10 <= hora < 14: return "De compras / Spa", "WhatsApp", "Consintiéndose.", "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1470"
-        elif 14 <= hora < 17: return "Restaurante", "WhatsApp", "Comiendo ensalada.", "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=1470"
-        elif 17 <= hora < 20: return "Gimnasio", "En Persona", "Entrenando frente al espejo. Estás ahí.", "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470"
-        elif 20 <= hora < 23: return "En su casa", "WhatsApp", "Haciendo skincare.", "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=1475"
-        else: return "Cama", "WhatsApp", "Durmiendo furiosa.", "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=1470"
-        
-    elif personaje == "Raven":
-        if 6 <= hora < 14: return "Cama", "WhatsApp", "Durmiendo hasta tarde.", "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=1470"
-        elif 14 <= hora < 21: return "Cafetería", "En Persona", "Trabajando de barista. Estás pidiendo café.", "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=1447"
-        elif 21 <= hora < 24: return "En un bar/toque", "WhatsApp", "Escuchando música.", "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1374"
-        else: return "Madrugada oscura", "WhatsApp", "Viendo cosas raras.", "https://images.unsplash.com/photo-1559588501-8b3684a1e941?q=80&w=1470"
-        
-    elif personaje == "Valeria":
-        if 7 <= hora < 15: return "UPA (Universidad)", "En Persona", "En el campus de la UPA. Estás ahí.", "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=1470"
-        elif 15 <= hora < 18: return "Biblioteca", "WhatsApp", "Haciendo tareas de ingeniería.", "https://images.unsplash.com/photo-1568667256549-094345857637?q=80&w=1415"
-        elif 18 <= hora < 23: return "Casa", "WhatsApp", "Relajándose y viendo series.", "https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1469"
-        else: return "Cama", "WhatsApp", "Durmiendo dulcemente.", "https://images.unsplash.com/photo-1505693314120-0d443867891c?q=80&w=1511"
-
 ciudad_actual, temperatura_actual = obtener_entorno_global()
 lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = obtener_rutina(p_actual)
 
-# Inyectar el fondo correspondiente a la rutina de la chica actual
 inyectar_fondo(url_fondo_dinamico)
 
-# --- 5. MENÚ SUPERIOR DE NAVEGACIÓN ---
+# --- 4. MENÚ SUPERIOR DE NAVEGACIÓN ---
 col_titulo, col_menu = st.columns([8, 2])
 with col_menu:
     with st.popover("⚙️"):
@@ -229,12 +150,10 @@ with col_menu:
             st.rerun()
 
 with col_titulo:
-    if modo_comunicacion == "En Persona":
-        st.subheader(f"📍 {lugar_actual}")
-    else:
-        st.subheader(f"{info_p['emoji']} {p_actual}")
+    if modo_comunicacion == "En Persona": st.subheader(f"📍 {lugar_actual}")
+    else: st.subheader(f"{info_p['emoji']} {p_actual}")
 
-# --- 6. BASE DE DATOS SQLITE ---
+# --- 5. BASE DE DATOS SQLITE DE CHAT ---
 conexion = sqlite3.connect(db_name, check_same_thread=False)
 cursor = conexion.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, rol TEXT NOT NULL, contenido TEXT NOT NULL, ruta_imagen TEXT)''')
@@ -254,9 +173,12 @@ else:
 if "estado_clara" not in st.session_state: st.session_state.estado_clara = emocion_inicial
 if "afinidad" not in st.session_state: st.session_state.afinidad = afinidad_inicial
 
-# --- 7. PANEL LATERAL DINÁMICO ---
+# --- 6. PANEL LATERAL DINÁMICO (ARREGLADO) ---
 with st.sidebar:
     if os.path.exists(info_p["icono"]): st.image(info_p["icono"])
+    st.markdown("---")
+    st.markdown(f"**📍 Lugar:** {lugar_actual}")
+    st.markdown(f"**📱 Vía:** {modo_comunicacion}")
     st.markdown("---")
     st.markdown(f"### 💳 Billetera: {st.session_state.monedas} 🪙")
     st.markdown("---")
@@ -279,7 +201,7 @@ with st.sidebar:
             st.session_state.regalo_pendiente = desc
             st.rerun()
         else:
-            st.toast(f"❌ Necesitas {precio}🪙 para comprar esto. ¡Sigue chateando!", icon="💸")
+            st.toast(f"❌ Necesitas {precio}🪙 para comprar esto.", icon="💸")
 
     with st.expander(f"🎁 Tienda ({p_actual})"):
         st.markdown("**Básico**")
@@ -307,7 +229,7 @@ with st.sidebar:
             if c9.button(f"{p[2][0]}\n({p[2][2]}🪙)"): procesar_compra(p[2][0], p[2][1], p[2][2])
         else: st.caption("🔒 *Desbloquea al 70%*")
 
-# --- 8. CEREBRO Y PROMPT MAESTRO ---
+# --- 7. CEREBRO Y PROMPT MAESTRO ---
 cursor.execute("SELECT dato FROM memoria_clara")
 recuerdos_bd = cursor.fetchall()
 texto_recuerdos = "\n".join([f"- {r[0]}" for r in recuerdos_bd]) if recuerdos_bd else "Aún no sabe nada de ti."
@@ -333,13 +255,12 @@ REGLA DE SUGERENCIAS (OBLIGATORIA): Escribe 3 posibles respuestas cortas que EL 
 if "client" not in st.session_state: st.session_state.client = genai.Client(api_key=st.secrets["GEMINI_KEY"])
 if "client_groq" not in st.session_state: st.session_state.client_groq = Groq(api_key=st.secrets["GROQ_KEY"])
 
-# --- 9. DIBUJAR CHAT Y CONTROLES ---
+# --- 8. DIBUJAR CHAT Y CONTROLES ---
 cursor.execute("SELECT rol, contenido, ruta_imagen FROM mensajes ORDER BY id ASC")
 for rol, contenido, ruta_imagen_db in cursor.fetchall():
     contenido_visual = re.sub(r'\((.*?)\)', r'<i style="color: #a6b2ba;">*\1*</i>', contenido, flags=re.DOTALL)
     contenido_visual = re.sub(r'\*(.*?)\*', r'<i style="color: #a6b2ba;">*\1*</i>', contenido_visual, flags=re.DOTALL)
     
-    # SPRINT 8.1.1: Ocultar comandos de sistema visualmente
     if "[SISTEMA: REGALO PREMIUM VERIFICADO]" in contenido_visual:
         contenido_visual = contenido_visual.replace("[SISTEMA: REGALO PREMIUM VERIFICADO] El usuario te ha enviado", "🎁 <b>Regalo enviado:</b>")
         
@@ -402,7 +323,7 @@ elif entrada_usuario:
     actualizar_monedas(st.session_state.monedas + 5)
     st.toast("¡Ganaste +5 🪙 por platicar!", icon="💰")
 
-# --- 10. PROCESAMIENTO AI Y HUMO Y ESPEJOS ---
+# --- 9. PROCESAMIENTO AI ---
 if mensaje_final:
     hora_actual = time.time()
     horas_ausente = 0.0
