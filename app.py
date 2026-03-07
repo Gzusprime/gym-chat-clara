@@ -10,7 +10,7 @@ import edge_tts
 import asyncio
 import requests
 
-# 🚀 IMPORTAMOS NUESTRO NUEVO MÓDULO (Esto conecta los dos archivos)
+# 🚀 IMPORTAMOS NUESTRO MÓDULO ESTÁTICO
 from lore import PERSONAJES, obtener_entorno_global, obtener_rutina
 
 # --- 1. CONFIGURACIÓN VISUAL Y CSS MÓVIL ---
@@ -38,6 +38,7 @@ def inyectar_fondo(url_imagen):
 # --- 2. SISTEMA DE LOGIN Y BILLETERA ---
 if "usuario_valido" not in st.session_state: st.session_state.usuario_valido = False
 if "personaje_seleccionado" not in st.session_state: st.session_state.personaje_seleccionado = None
+if "creando_personaje" not in st.session_state: st.session_state.creando_personaje = False
 
 if not st.session_state.usuario_valido:
     inyectar_fondo("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1364") 
@@ -73,7 +74,72 @@ def actualizar_monedas(cantidad):
     con_b.commit()
     con_b.close()
 
-# --- 3. PANTALLA DE BANDEJA DE ENTRADA ---
+# --- 3. MOTOR DE PERSONAJES PERSONALIZADOS (V9.0) ---
+todos_los_personajes = dict(PERSONAJES) # Clonamos a las chicas oficiales
+
+db_bots = f"bots_custom_{st.session_state.usuario_id}.db"
+con_bots = sqlite3.connect(db_bots, check_same_thread=False)
+cur_bots = con_bots.cursor()
+cur_bots.execute('''CREATE TABLE IF NOT EXISTS mis_bots 
+    (nombre TEXT, emoji TEXT, descripcion TEXT, prompt TEXT, img_prompt TEXT, voz TEXT)''')
+cur_bots.execute("SELECT * FROM mis_bots")
+
+for row in cur_bots.fetchall():
+    nom, emo, desc, p_base, p_img, voz = row
+    todos_los_personajes[nom] = {
+        "icono": "sin_foto.png", # Al no existir, el sistema usará el Emoji
+        "emoji": emo,
+        "dificultad": "Personalizado 🧠",
+        "voz": voz,
+        "descripcion": desc,
+        "prompt_base": p_base,
+        "img_prompt": p_img,
+        "multiplicador_ganancia": 1.0, 
+        "multiplicador_perdida": 0.1,
+        "tienda": PERSONAJES["Valeria"]["tienda"] # Le damos la tienda de Valeria por defecto
+    }
+con_bots.close()
+
+# --- 4. FORMULARIO DE CREACIÓN DE PERSONAJE ---
+if st.session_state.creando_personaje:
+    inyectar_fondo("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1364")
+    st.title("🛠️ Fábrica de Personajes")
+    st.write("Diseña el cerebro y la apariencia de tu propia IA.")
+    
+    with st.form("form_nuevo_bot"):
+        c1, c2 = st.columns([4, 1])
+        n_nombre = c1.text_input("Nombre de la IA", placeholder="Ej. Sofía, Marcus, etc.")
+        n_emoji = c2.text_input("Emoji", value="🤖", max_chars=2)
+        
+        n_desc = st.text_input("Descripción Corta", placeholder="Ej. Compañera de trabajo amable.")
+        n_prompt = st.text_area("Prompt Maestro (Su alma)", placeholder="Eres [Nombre], tienes una personalidad...", height=100)
+        n_img = st.text_area("Prompt Visual (En inglés, para sus fotos)", placeholder="photorealistic, highly detailed, beautiful girl...", height=80)
+        n_voz = st.selectbox("Acento de Voz", [
+            "es-MX-DaliaNeural", # Mexicana
+            "es-ES-ElviraNeural", # Española
+            "es-CO-SalomeNeural", # Colombiana
+            "es-AR-ElenaNeural", # Argentina
+            "es-MX-JorgeNeural"  # Mexicano (Hombre)
+        ])
+        
+        btn_crear = st.form_submit_button("🧪 Darle Vida (Crear)")
+        
+        if btn_crear and n_nombre and n_prompt:
+            con_b2 = sqlite3.connect(db_bots)
+            con_b2.execute("INSERT INTO mis_bots VALUES (?, ?, ?, ?, ?, ?)", 
+                          (n_nombre.strip(), n_emoji, n_desc, n_prompt, n_img, n_voz))
+            con_b2.commit()
+            con_b2.close()
+            st.session_state.creando_personaje = False
+            st.toast(f"¡{n_nombre} ha nacido!", icon="🎉")
+            st.rerun()
+
+    if st.button("❌ Cancelar", use_container_width=True):
+        st.session_state.creando_personaje = False
+        st.rerun()
+    st.stop()
+
+# --- 5. PANTALLA DE BANDEJA DE ENTRADA ---
 if st.session_state.personaje_seleccionado is None:
     inyectar_fondo("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1364") 
     col_t, col_btn = st.columns([7, 3])
@@ -83,9 +149,14 @@ if st.session_state.personaje_seleccionado is None:
         st.rerun()
         
     st.write(f"Conectado como: **{st.session_state.nombre_real}** | 💳 **{st.session_state.monedas} 🪙**")
+    
+    if st.button("➕ Diseña tu propio Personaje", use_container_width=True):
+        st.session_state.creando_personaje = True
+        st.rerun()
+        
     st.markdown("---")
     
-    for nombre, datos in PERSONAJES.items():
+    for nombre, datos in todos_los_personajes.items():
         db_char = f"memoria_{st.session_state.usuario_id}_{nombre.lower()}.db"
         ultimo_msj = "Toca para iniciar el chat..."
         
@@ -107,7 +178,7 @@ if st.session_state.personaje_seleccionado is None:
             c_img, c_info = st.columns([1, 4])
             with c_img:
                 if os.path.exists(datos["icono"]): st.image(datos["icono"], width=80)
-                else: st.markdown(f"<h2 style='text-align:center;'>{datos['emoji']}</h2>", unsafe_allow_html=True)
+                else: st.markdown(f"<h1 style='text-align:center;'>{datos['emoji']}</h1>", unsafe_allow_html=True)
             with c_info:
                 st.markdown(f"**{nombre}** {datos['emoji']}")
                 st.caption(f"_{ultimo_msj}_")
@@ -122,15 +193,20 @@ if st.session_state.personaje_seleccionado is None:
 
 # --- SI LLEGAMOS AQUÍ, YA HAY UN PERSONAJE SELECCIONADO ---
 p_actual = st.session_state.personaje_seleccionado
-info_p = PERSONAJES[p_actual]
+info_p = todos_los_personajes[p_actual]
 db_name = f"memoria_{st.session_state.usuario_id}_{p_actual.lower()}.db"
 
 ciudad_actual, temperatura_actual = obtener_entorno_global()
-lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = obtener_rutina(p_actual)
+
+# Adaptar el entorno si es un bot personalizado (reutilizan la rutina de Valeria por defecto)
+if p_actual in PERSONAJES:
+    lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = obtener_rutina(p_actual)
+else:
+    lugar_actual, modo_comunicacion, contexto_prompt, url_fondo_dinamico = obtener_rutina("Valeria")
 
 inyectar_fondo(url_fondo_dinamico)
 
-# --- 4. MENÚ SUPERIOR DE NAVEGACIÓN ---
+# --- 6. MENÚ SUPERIOR DE NAVEGACIÓN ---
 col_titulo, col_menu = st.columns([8, 2])
 with col_menu:
     with st.popover("⚙️"):
@@ -153,7 +229,7 @@ with col_titulo:
     if modo_comunicacion == "En Persona": st.subheader(f"📍 {lugar_actual}")
     else: st.subheader(f"{info_p['emoji']} {p_actual}")
 
-# --- 5. BASE DE DATOS SQLITE DE CHAT ---
+# --- 7. BASE DE DATOS SQLITE DE CHAT ---
 conexion = sqlite3.connect(db_name, check_same_thread=False)
 cursor = conexion.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, rol TEXT NOT NULL, contenido TEXT NOT NULL, ruta_imagen TEXT)''')
@@ -173,9 +249,11 @@ else:
 if "estado_clara" not in st.session_state: st.session_state.estado_clara = emocion_inicial
 if "afinidad" not in st.session_state: st.session_state.afinidad = afinidad_inicial
 
-# --- 6. PANEL LATERAL DINÁMICO (ARREGLADO) ---
+# --- 8. PANEL LATERAL DINÁMICO ---
 with st.sidebar:
     if os.path.exists(info_p["icono"]): st.image(info_p["icono"])
+    else: st.markdown(f"<h1 style='text-align:center; font-size: 80px;'>{info_p['emoji']}</h1>", unsafe_allow_html=True)
+    
     st.markdown("---")
     st.markdown(f"**📍 Lugar:** {lugar_actual}")
     st.markdown(f"**📱 Vía:** {modo_comunicacion}")
@@ -218,7 +296,6 @@ with st.sidebar:
             if c4.button(f"{i[0][0]}\n({i[0][2]}🪙)"): procesar_compra(i[0][0], i[0][1], i[0][2])
             if c5.button(f"{i[1][0]}\n({i[1][2]}🪙)"): procesar_compra(i[1][0], i[1][1], i[1][2])
             if c6.button(f"{i[2][0]}\n({i[2][2]}🪙)"): procesar_compra(i[2][0], i[2][1], i[2][2])
-        else: st.caption("🔒 *Desbloquea al 30%*")
 
         if st.session_state.afinidad >= 70.0:
             st.markdown("**Premium**")
@@ -227,9 +304,8 @@ with st.sidebar:
             if c7.button(f"{p[0][0]}\n({p[0][2]}🪙)"): procesar_compra(p[0][0], p[0][1], p[0][2])
             if c8.button(f"{p[1][0]}\n({p[1][2]}🪙)"): procesar_compra(p[1][0], p[1][1], p[1][2])
             if c9.button(f"{p[2][0]}\n({p[2][2]}🪙)"): procesar_compra(p[2][0], p[2][1], p[2][2])
-        else: st.caption("🔒 *Desbloquea al 70%*")
 
-# --- 7. CEREBRO Y PROMPT MAESTRO ---
+# --- 9. CEREBRO Y PROMPT MAESTRO ---
 cursor.execute("SELECT dato FROM memoria_clara")
 recuerdos_bd = cursor.fetchall()
 texto_recuerdos = "\n".join([f"- {r[0]}" for r in recuerdos_bd]) if recuerdos_bd else "Aún no sabe nada de ti."
@@ -255,7 +331,7 @@ REGLA DE SUGERENCIAS (OBLIGATORIA): Escribe 3 posibles respuestas cortas que EL 
 if "client" not in st.session_state: st.session_state.client = genai.Client(api_key=st.secrets["GEMINI_KEY"])
 if "client_groq" not in st.session_state: st.session_state.client_groq = Groq(api_key=st.secrets["GROQ_KEY"])
 
-# --- 8. DIBUJAR CHAT Y CONTROLES ---
+# --- 10. DIBUJAR CHAT Y CONTROLES ---
 cursor.execute("SELECT rol, contenido, ruta_imagen FROM mensajes ORDER BY id ASC")
 for rol, contenido, ruta_imagen_db in cursor.fetchall():
     contenido_visual = re.sub(r'\((.*?)\)', r'<i style="color: #a6b2ba;">*\1*</i>', contenido, flags=re.DOTALL)
@@ -323,7 +399,7 @@ elif entrada_usuario:
     actualizar_monedas(st.session_state.monedas + 5)
     st.toast("¡Ganaste +5 🪙 por platicar!", icon="💰")
 
-# --- 9. PROCESAMIENTO AI ---
+# --- 11. PROCESAMIENTO AI ---
 if mensaje_final:
     hora_actual = time.time()
     horas_ausente = 0.0
