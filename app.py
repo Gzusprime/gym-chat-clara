@@ -373,11 +373,13 @@ if mensaje_final:
         cursor.execute("INSERT INTO memoria_clara (dato) VALUES (?)", (match_recuerdo.group(1).strip(),))
         texto_clara = re.sub(r'\[RECORDAR:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
 
-    # SPRINT 7.1: Extracción flexible (Atrapa errores como SUGERRECIA o SUGERENCIAS)
+ # SPRINT 7.1: Extracción flexible (Atrapa errores como SUGERRECIA o SUGERENCIAS)
     sugerencias_extraidas = re.findall(r'\[SUGE.*?:\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
     st.session_state.sugerencias_actuales = sugerencias_extraidas if sugerencias_extraidas else []
     texto_clara = re.sub(r'\[SUGE.*?:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
-    
+
+    # --- Generación Visual (Aquí estaba el problema) ---
+    ruta_foto = None # <--- ESTA ES LA LÍNEA QUE SE HABÍA PERDIDO
     match_foto = re.search(r'\[ENVIAR FOTO:?\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
     if match_foto:
         descripcion_interna = match_foto.group(1).strip()
@@ -404,7 +406,8 @@ if mensaje_final:
                     ruta_foto = f"temp_images/foto_{int(time.time())}.png"
                     with open(ruta_foto, "wb") as f: f.write(resp_img.content)
             except: pass
-    else: texto_clara_limpio = texto_clara
+    else: 
+        texto_clara_limpio = texto_clara
 
     cursor.execute("INSERT INTO mensajes (rol, contenido, ruta_imagen) VALUES (?, ?, ?)", ("model", texto_clara_limpio, ruta_foto))
 
