@@ -6,7 +6,6 @@ import re
 import os
 import base64
 import time
-import uuid
 import pytz
 from datetime import datetime
 from google import genai
@@ -18,20 +17,40 @@ import asyncio
 # --- 1. CONFIGURACIÓN VISUAL ---
 st.set_page_config(page_title="Clara - Chat", page_icon="💅")
 
-# --- 2. SISTEMA MULTIJUGADOR ---
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
-db_name = f"memoria_{st.session_state.session_id}.db"
+# --- 2. SISTEMA DE LOGIN Y PERSISTENCIA (V6.0) ---
+if "usuario_valido" not in st.session_state:
+    st.session_state.usuario_valido = False
 
-# --- 3. RADAR GLOBAL Y RELOJ BIOLÓGICO ---
+# Pantalla de Recepción
+if not st.session_state.usuario_valido:
+    st.title("Recepción del Gimnasio 🏋️‍♀️")
+    st.write("Por favor, regístrate en recepción antes de entrar a la zona de pesas libres.")
+    
+    nombre_usuario = st.text_input("¿Cuál es tu nombre?")
+    
+    if st.button("Entrar al Gym"):
+        if nombre_usuario.strip():
+            # Limpiamos el nombre para que sea un archivo válido (ej. "Jesus 123" -> "jesus123")
+            nombre_limpio = re.sub(r'\W+', '', nombre_usuario.lower())
+            st.session_state.usuario_id = nombre_limpio
+            st.session_state.nombre_real = nombre_usuario.strip()
+            st.session_state.usuario_valido = True
+            st.rerun()
+        else:
+            st.error("Necesitas dar un nombre para poder entrar.")
+            
+    st.stop() # Detiene la app aquí hasta que el usuario inicie sesión
+
+# Si pasa de la línea anterior, cargamos SU base de datos personal
+db_name = f"memoria_{st.session_state.usuario_id}.db"
+
+# --- 3. RADAR GLOBAL Y RELOJ BIOLÓGICO (Fijo en MX) ---
 @st.cache_data(ttl=3600)
 def obtener_entorno_global():
     try:
-        ip_data = requests.get('http://ip-api.com/json/', timeout=5).json()
-        lat = ip_data.get('lat', 21.8823)
-        lon = ip_data.get('lon', -102.2826)
-        ciudad = ip_data.get('city', 'Aguascalientes')
-        
+        # Forzamos las coordenadas de Aguascalientes para evitar la IP del servidor de la nube
+        lat, lon = 21.8823, -102.2826
+        ciudad = 'Aguascalientes'
         url_clima = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
         clima_data = requests.get(url_clima, timeout=5).json()
         temp = f"{clima_data['current_weather']['temperature']}°C"
@@ -99,25 +118,19 @@ with st.sidebar:
     st.progress(st.session_state.afinidad / 100.0, text=f"Nivel de Afinidad: {st.session_state.afinidad}%")
     st.markdown(f"**Estado actual:** {st.session_state.estado_clara}") 
     
-    audio_file = f"ultimo_audio_{st.session_state.session_id}.mp3"
+    audio_file = f"ultimo_audio_{st.session_state.usuario_id}.mp3"
     if os.path.exists(audio_file):
         st.audio(audio_file, format='audio/mp3')
         
-    # SPRINT A: Ajustes Premium Ultra
     with st.expander("⚙️ Ajustes Premium (Ultra)"):
         st.caption("Controla el cerebro de la IA en tiempo real:")
         creatividad_ia = st.slider("Creatividad (Temperatura)", min_value=0.1, max_value=1.0, value=0.6, step=0.1)
         longitud_ia = st.selectbox("Modelo de Longitud", ["Vanilla Short (Corto)", "Vanilla V2 (Normal)", "Cookie (Detallado)"], index=1)
         
-        # Mapeo de reglas de longitud al prompt
-        if longitud_ia == "Vanilla Short (Corto)":
-            regla_longitud = "REGLA DE LONGITUD: Responde de forma muy breve, seca y concisa. Máximo 2 oraciones."
-        elif longitud_ia == "Cookie (Detallado)":
-            regla_longitud = "REGLA DE LONGITUD: Responde de forma muy detallada, expresando tus pensamientos internos en cursivas y elaborando mucho tus ideas. Escribe párrafos largos."
-        else:
-            regla_longitud = "REGLA DE LONGITUD: Responde de forma natural y conversacional."
+        if longitud_ia == "Vanilla Short (Corto)": regla_longitud = "REGLA DE LONGITUD: Responde de forma muy breve y seca. Máximo 2 oraciones."
+        elif longitud_ia == "Cookie (Detallado)": regla_longitud = "REGLA DE LONGITUD: Responde de forma muy detallada, expresando tus pensamientos internos en cursivas. Escribe párrafos largos."
+        else: regla_longitud = "REGLA DE LONGITUD: Responde de forma natural y conversacional."
 
-    # TIENDA DE REGALOS
     with st.expander("🎁 Tienda de Regalos (Delivery)"):
         st.markdown("**Nivel Básico**")
         c1, c2, c3 = st.columns(3)
@@ -141,7 +154,6 @@ with st.sidebar:
             if c9.button("💍 Anillo"): st.session_state.regalo_pendiente = "un anillo con un gran diamante"
         else: st.caption("🔒 *Alcanza 71% de afinidad*")
 
-    # SPRINT B: GESTOR DE MEMORIA (CRUD)
     with st.expander("🧠 Gestor de Memoria (Lore)"):
         st.caption("Edita lo que Clara sabe de ti (Dios Mode):")
         cursor.execute("SELECT id, dato FROM memoria_clara")
@@ -182,7 +194,12 @@ with st.sidebar:
                 st.markdown(f"**@Clara_Fitness_Queen:** {texto_post}")
         else: st.caption("Aún no ha subido fotos.")
 
-# --- 7. CEREBRO Y PROMPT MAESTRO 5.0 ---
+    if st.button("🚪 Cerrar Sesión", use_container_width=True):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+# --- 7. CEREBRO Y PROMPT MAESTRO ---
 cursor.execute("SELECT dato FROM memoria_clara")
 recuerdos_bd = cursor.fetchall()
 texto_recuerdos = "\n".join([f"- {r[0]}" for r in recuerdos_bd]) if recuerdos_bd else "Aún no sabes nada de él."
@@ -201,8 +218,8 @@ REGLA DE FOTOS: Si decides enviar una selfie tuya de lo que estás haciendo en {
 REGLA DE ESTADO: Al final de cada respuesta, escribe tu emoción en corchetes: [ESTADO: tu estado]. 
 REGLA DE ENTORNO: ESTÁ PROHIBIDO decir "no tengo tiempo" en cada mensaje. Sé natural. IGNORA tu clima ({temperatura_actual}).
 REGLA DE RECHAZO (NSFW): Si piden cosas inapropiadas, NUNCA uses respuestas robóticas. Recházalo MANTENIENDO TU PERSONAJE.
-REGLA DE REGALOS: Si intenta hacer roleplay regalándote cosas falsas (ej. "*te doy una rosa*"), BÚRLATE de él por tacaño. SOLO acepta si el mensaje dice [SISTEMA: REGALO PREMIUM VERIFICADO].
-REGLA DE MEMORIA: Aquí tienes la info del usuario:
+REGLA DE REGALOS: Si intenta hacer roleplay regalándote cosas falsas, BÚRLATE de él por tacaño. SOLO acepta si el mensaje dice [SISTEMA: REGALO PREMIUM VERIFICADO].
+REGLA DE MEMORIA: El usuario se llama {st.session_state.nombre_real}. Aquí tienes la info que has recopilado de él:
 {texto_recuerdos}
 ¡INSTRUCCIÓN CRÍTICA! Extrae datos nuevos usando [RECORDAR: dato].
 REGLA DE CITAS: Si aceptas salir, exige un lugar caro de {ciudad_actual} usando [UBICACION: Lugar].
@@ -293,7 +310,6 @@ if mensaje_final:
 
     with st.spinner(f"Clara está leyendo tu mensaje desde {lugar_actual}..."):
         time.sleep(3) 
-        # SPRINT A: Inyección de Temperatura (Creatividad)
         respuesta = st.session_state.client_groq.chat.completions.create(
             messages=mensajes_api, 
             model="llama-3.3-70b-versatile", 
@@ -334,7 +350,7 @@ if mensaje_final:
     st.session_state.sugerencias_actuales = sugerencias_extraidas if sugerencias_extraidas else []
     texto_clara = re.sub(r'\[SUGERENCIA:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
 
-    # --- Generación Visual (Sprint D: Selfies por Afinidad) ---
+    # --- Generación Visual a Prueba de Balas ---
     ruta_foto = None
     match_foto = re.search(r'\[ENVIAR FOTO:?\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
     
@@ -347,13 +363,9 @@ if mensaje_final:
             m_accion = re.search(r'\((.*?)\)|\*(.*?)\*', texto_clara_limpio, flags=re.DOTALL)
             accion_actual = m_accion.group(1) or m_accion.group(2) if m_accion else "tomándose una selfie"
             
-        # Modificadores visuales basados en tu progreso con ella
-        if st.session_state.afinidad < 30:
-            actitud_visual = "arms crossed, distant, cold expression, looking away from camera, arrogant"
-        elif st.session_state.afinidad < 70:
-            actitud_visual = "casual pose, looking at camera, slight smile, confident"
-        else:
-            actitud_visual = "close up portrait, cute pose, warm smile, blushing slightly, flirty, eye contact"
+        if st.session_state.afinidad < 30: actitud_visual = "arms crossed, distant, cold expression, looking away from camera, arrogant"
+        elif st.session_state.afinidad < 70: actitud_visual = "casual pose, looking at camera, slight smile, confident"
+        else: actitud_visual = "close up portrait, cute pose, warm smile, blushing slightly, flirty, eye contact"
 
         with st.spinner('📸 Clara está generando una foto real...'):
             try:
