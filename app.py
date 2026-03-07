@@ -64,7 +64,6 @@ PERSONAJES = {
 if "usuario_valido" not in st.session_state: st.session_state.usuario_valido = False
 if "personaje_seleccionado" not in st.session_state: st.session_state.personaje_seleccionado = None
 
-# PANTALLA 1: RECEPCIÓN
 if not st.session_state.usuario_valido:
     st.title("Hub Principal 🌐")
     st.write("Por favor, inicia sesión con tu nombre para acceder a tus chats.")
@@ -77,7 +76,6 @@ if not st.session_state.usuario_valido:
             st.rerun()
     st.stop()
 
-# PANTALLA 2: SELECCIÓN DE PERSONAJE
 if st.session_state.personaje_seleccionado is None:
     st.title(f"Bienvenido, {st.session_state.nombre_real} 👋")
     st.write("¿Con quién te gustaría platicar hoy?")
@@ -94,7 +92,6 @@ if st.session_state.personaje_seleccionado is None:
             st.write(datos["descripcion"])
             if st.button(f"Chatear con {nombre}", key=f"btn_{nombre}", use_container_width=True):
                 st.session_state.personaje_seleccionado = nombre
-                # Limpiar la memoria en RAM del chat anterior si existía
                 if "memoria_groq" in st.session_state: del st.session_state.memoria_groq
                 if "sugerencias_actuales" in st.session_state: del st.session_state.sugerencias_actuales
                 st.rerun()
@@ -156,6 +153,7 @@ with col_menu:
             con = sqlite3.connect(db_name, check_same_thread=False)
             con.execute("DELETE FROM mensajes")
             con.execute("DELETE FROM memoria_clara")
+            con.execute("DELETE FROM meta_datos")
             con.execute("UPDATE estado_personaje SET afinidad = 0.0, emocion = 'Indiferente' WHERE id = 1")
             con.commit()
             st.session_state.afinidad = 0.0
@@ -171,12 +169,13 @@ with col_titulo:
         st.title(f"💬 WhatsApp con {p_actual} {info_p['emoji']}")
         st.write("Escribiendo...")
 
-# --- 6. BASE DE DATOS SQLITE (Específica del personaje) ---
+# --- 6. BASE DE DATOS SQLITE (Actualizada con Reloj Interno) ---
 conexion = sqlite3.connect(db_name, check_same_thread=False)
 cursor = conexion.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, rol TEXT NOT NULL, contenido TEXT NOT NULL, ruta_imagen TEXT)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS memoria_clara (id INTEGER PRIMARY KEY AUTOINCREMENT, dato TEXT NOT NULL)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS estado_personaje (id INTEGER PRIMARY KEY, afinidad REAL, emocion TEXT)''')
+cursor.execute('''CREATE TABLE IF NOT EXISTS meta_datos (clave TEXT PRIMARY KEY, valor TEXT)''') # Tabla para el reloj
 
 cursor.execute("SELECT afinidad, emocion FROM estado_personaje WHERE id=1")
 estado_bd = cursor.fetchone()
@@ -241,13 +240,9 @@ cursor.execute("SELECT dato FROM memoria_clara")
 recuerdos_bd = cursor.fetchall()
 texto_recuerdos = "\n".join([f"- {r[0]}" for r in recuerdos_bd]) if recuerdos_bd else "Aún no sabe nada de ti."
 
-# Dinamismo por afinidad
-if st.session_state.afinidad > 70.0:
-    actitud_dinamica = "En el fondo ya sientes mucho cariño por él, muéstrate coqueta o muy dulce."
-elif st.session_state.afinidad < 20.0:
-    actitud_dinamica = "Apenas lo conoces, mantén tu distancia y tu personalidad base fuerte."
-else:
-    actitud_dinamica = "Empiezas a agarrarle confianza, trátalo con amabilidad pero sin exagerar."
+if st.session_state.afinidad > 70.0: actitud_dinamica = "En el fondo ya sientes mucho cariño por él, muéstrate coqueta o muy dulce."
+elif st.session_state.afinidad < 20.0: actitud_dinamica = "Apenas lo conoces, mantén tu distancia y tu personalidad base fuerte."
+else: actitud_dinamica = "Empiezas a agarrarle confianza, trátalo con amabilidad pero sin exagerar."
 
 instrucciones_clara = f"""{info_p['prompt_base']}
 {actitud_dinamica}
@@ -261,7 +256,7 @@ REGLA DE REGALOS: Si intenta hacer roleplay regalándote cosas falsas de texto, 
 REGLA DE MEMORIA: El usuario se llama {st.session_state.nombre_real}. Info sobre él:
 {texto_recuerdos}
 ¡CRÍTICO! Extrae datos nuevos de su vida usando [RECORDAR: dato].
-REGLA DE SUGERENCIAS (OBLIGATORIA): Escribe 3 posibles respuestas cortas que EL USUARIO te podría contestar. Usa EXACTAMENTE este formato: [SUGERENCIA: Lo que diría el usuario]. NUNCA agregues explicaciones ni instrucciones."""
+REGLA DE SUGERENCIAS (OBLIGATORIA): Escribe 3 posibles respuestas cortas que EL USUARIO te podría contestar. Usa EXACTAMENTE este formato: [SUGERENCIA: Lo que diría el usuario]. NUNCA agregues explicaciones."""
 
 if "client" not in st.session_state: st.session_state.client = genai.Client(api_key=st.secrets["GEMINI_KEY"])
 if "client_groq" not in st.session_state: st.session_state.client_groq = Groq(api_key=st.secrets["GROQ_KEY"])
@@ -324,24 +319,47 @@ elif entrada_usuario:
     if modo_accion: mensaje_final = f"*{mensaje_final}*"
     foto_final = entrada_usuario.files[0] if entrada_usuario.files else None
 
-# --- 10. PROCESAMIENTO AI ---
+# --- 10. PROCESAMIENTO AI Y HUMO Y ESPEJOS ---
 if mensaje_final:
+    # 1. Chequeo de Ausencia (Humo y Espejos)
+    hora_actual = time.time()
+    horas_ausente = 0.0
+    cursor.execute("SELECT valor FROM meta_datos WHERE clave='ultima_conexion'")
+    row = cursor.fetchone()
+    if row:
+        ultima_conexion = float(row[0])
+        horas_ausente = (hora_actual - ultima_conexion) / 3600.0
+
+    cursor.execute("INSERT OR REPLACE INTO meta_datos (clave, valor) VALUES (?, ?)", ("ultima_conexion", str(hora_actual)))
+    conexion.commit()
+
+    # Inyección de reclamo si desapareciste más de 2 horas (y si no es el primer mensaje)
+    mensaje_para_api = mensaje_final
+    if horas_ausente >= 2.0 and row is not None:
+        reclamo = f"[SISTEMA: El usuario te dejó en 'visto' y desapareció por {int(horas_ausente)} horas. Muestra tu molestia o reclámale sutilmente por dejarte esperando antes de contestar a su mensaje.]\n\n"
+        mensaje_para_api = reclamo + mensaje_final
+
+    # 2. Guardado en Memoria
     cursor.execute("INSERT INTO mensajes (rol, contenido, ruta_imagen) VALUES (?, ?, ?)", ("user", mensaje_final, None))
     conexion.commit()
     
     if "memoria_groq" not in st.session_state: st.session_state.memoria_groq = []
-    st.session_state.memoria_groq.append({"role": "user", "content": mensaje_final})
+    # Guardamos el mensaje limpio en el UI, pero a la API le mandamos el que tiene la queja (si aplica)
+    st.session_state.memoria_groq.append({"role": "user", "content": mensaje_para_api})
     
+    # 3. Optimización de Tokens (Ventana Deslizante)
     mensajes_api = [{"role": "system", "content": instrucciones_clara}]
-    mensajes_api.extend(st.session_state.memoria_groq[:-1]) 
+    # Solo tomamos los últimos 10 mensajes (5 idas y vueltas) para no saturar la API gratuita de Groq
+    historial_reciente = st.session_state.memoria_groq[-11:-1] if len(st.session_state.memoria_groq) > 10 else st.session_state.memoria_groq[:-1]
+    mensajes_api.extend(historial_reciente)
 
     if foto_final is not None:
         try:
             from PIL import Image
             resp_vision = st.session_state.client.models.generate_content(model="gemini-2.5-flash", contents=["Describe esto corto.", Image.open(foto_final)])
-            mensajes_api.append({"role": "user", "content": f"[Foto: '{resp_vision.text}']. Msj: '{mensaje_final}'"})
-        except: mensajes_api.append({"role": "user", "content": mensaje_final})
-    else: mensajes_api.append({"role": "user", "content": mensaje_final})
+            mensajes_api.append({"role": "user", "content": f"[Foto: '{resp_vision.text}']. Msj: '{mensaje_para_api}'"})
+        except: mensajes_api.append({"role": "user", "content": mensaje_para_api})
+    else: mensajes_api.append({"role": "user", "content": mensaje_para_api})
 
     with st.spinner(f"{p_actual} está respondiendo..."):
         time.sleep(2) 
@@ -359,7 +377,6 @@ if mensaje_final:
         positivos = ["divertida", "feliz", "halagada", "sonrojada", "interesada", "impresionada", "animada", "tierna", "enamorada"]
         negativos = ["irritada", "aburrida", "ofendida", "asco", "indiferente", "molesta", "harta"]
         
-        # SPRINT 7.0: Dificultad Dinámica por Personaje
         ganancia = info_p["multiplicador_ganancia"]
         perdida = info_p["multiplicador_perdida"]
         if any(p in e_low for p in positivos): st.session_state.afinidad = min(100.0, st.session_state.afinidad + ganancia)
@@ -373,13 +390,11 @@ if mensaje_final:
         cursor.execute("INSERT INTO memoria_clara (dato) VALUES (?)", (match_recuerdo.group(1).strip(),))
         texto_clara = re.sub(r'\[RECORDAR:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
 
- # SPRINT 7.1: Extracción flexible (Atrapa errores como SUGERRECIA o SUGERENCIAS)
     sugerencias_extraidas = re.findall(r'\[SUGE.*?:\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
     st.session_state.sugerencias_actuales = sugerencias_extraidas if sugerencias_extraidas else []
     texto_clara = re.sub(r'\[SUGE.*?:\s*.*?\]', '', texto_clara, flags=re.IGNORECASE).strip()
 
-    # --- Generación Visual (Aquí estaba el problema) ---
-    ruta_foto = None # <--- ESTA ES LA LÍNEA QUE SE HABÍA PERDIDO
+    ruta_foto = None
     match_foto = re.search(r'\[ENVIAR FOTO:?\s*(.*?)\]', texto_clara, flags=re.IGNORECASE)
     if match_foto:
         descripcion_interna = match_foto.group(1).strip()
@@ -406,8 +421,7 @@ if mensaje_final:
                     ruta_foto = f"temp_images/foto_{int(time.time())}.png"
                     with open(ruta_foto, "wb") as f: f.write(resp_img.content)
             except: pass
-    else: 
-        texto_clara_limpio = texto_clara
+    else: texto_clara_limpio = texto_clara
 
     cursor.execute("INSERT INTO mensajes (rol, contenido, ruta_imagen) VALUES (?, ?, ?)", ("model", texto_clara_limpio, ruta_foto))
 
